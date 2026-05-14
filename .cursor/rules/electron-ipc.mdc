@@ -1,0 +1,58 @@
+---
+description: Electron main process and IPC patterns
+globs: electron/**/*.ts, src/types/index.ts, src/**/*electron*
+alwaysApply: false
+---
+
+# Electron & IPC Patterns
+
+## Project Structure
+
+```
+electron/
+├── main/
+│   ├── index.ts          # App lifecycle (BrowserWindow, app events)
+│   ├── ipc/handlers.ts   # All ipcMain.handle() registrations
+│   └── services/         # Business logic (runs in main process)
+│       └── imageCompress.ts
+└── preload/
+    └── index.ts          # contextBridge API exposure
+```
+
+## Adding a New IPC Handler
+
+**1. Define the API type** in `src/types/index.ts` under `ElectronAPI`:
+
+```typescript
+export interface ElectronAPI {
+  // existing methods...
+  newMethod: (arg: NewArg) => Promise<NewResult>
+}
+```
+
+**2. Register the handler** in `electron/main/ipc/handlers.ts`:
+
+```typescript
+ipcMain.handle('new-method', async (_, arg: NewArg) => {
+  // business logic
+  return result
+})
+```
+
+**3. Expose via context bridge** in `electron/preload/index.ts`:
+
+```typescript
+contextBridge.exposeInMainWorld('electronAPI', {
+  // existing methods...
+  newMethod: (arg) => ipcRenderer.invoke('new-method', arg)
+})
+```
+
+## Important Rules
+
+- **Image processing** (Sharp) belongs in `electron/main/services/`, never in renderer
+- **Do not** use `require()` — ESM only (`"type": "module"`)
+- **Main process** runs Node.js APIs; **preload** bridges to renderer
+- **Renderer** accesses Electron via `window.electronAPI` (fully typed)
+- All IPC uses `ipcMain.handle` / `ipcRenderer.invoke` (async request-response)
+- Progress/events use `webContents.send()` + `ipcRenderer.on()` in renderer

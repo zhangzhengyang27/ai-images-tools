@@ -1,0 +1,66 @@
+---
+description: General project conventions for ai-images-tools
+alwaysApply: true
+---
+
+# Project Conventions
+
+## Tech Stack
+
+- **Electron** desktop app via electron-vite + Vite 5
+- **Vue 3** with `<script setup lang="ts">` Composition API
+- **TypeScript** (strict mode)
+- **Pinia** for state management (setup store pattern)
+- **Tailwind CSS v4** for utilities, custom CSS for complex components
+- **PrimeVue 4** for UI primitives
+- **Sharp** for image processing (runs in Electron main process)
+- **pnpm** as package manager
+
+## Path Alias
+
+Use `@/` to reference `src/`:
+
+```typescript
+import { useImageStore } from '@/stores/imageStore'
+import type { ImageItem } from '@/types'
+```
+
+## Naming Conventions
+
+| Entity | Convention | Example |
+|--------|-----------|---------|
+| Components | PascalCase `.vue` | `ImageList.vue` |
+| Composables | camelCase `use*.ts` | `useToast.ts` |
+| Stores | camelCase `*Store.ts` | `imageStore.ts` |
+| Types | PascalCase | `ImageItem`, `CompressOptions` |
+| CSS classes | kebab-case or BEM | `.upload-zone`, `.img-item__thumb` |
+
+## State Management
+
+Use Pinia with setup store syntax. Never mutate state outside the store — always call store actions.
+
+```typescript
+export const useImageStore = defineStore('image', () => {
+  const images = ref<ImageItem[]>([])
+
+  function addImage(image: ImageItem) {
+    images.value.push(image)
+  }
+
+  return { images, addImage }
+})
+```
+
+## CSS / Styling
+
+- Custom color tokens defined in `src/assets/styles/main.css` via CSS variables (`--color-primary-*`, `--color-surface-*`)
+- Tailwind utility classes in component templates
+- Scoped `<style scoped>` for component-specific styles
+- BEM-style custom CSS classes for reusable complex components
+
+## Important Constraints
+
+- **Image processing** (Sharp) must run in `electron/main/services/`, not in the renderer
+- **IPC** is the only way renderer and main process communicate
+- All Electron API access from renderer goes through `window.electronAPI` (typed in `src/types/index.ts`)
+- Do not use `require()` — the project uses ESM (`"type": "module"`)

@@ -1,0 +1,94 @@
+---
+description: Vue 3 component patterns and conventions
+globs: **/*.vue
+alwaysApply: false
+---
+
+# Vue Component Patterns
+
+## Script Setup Structure
+
+Always use `<script setup lang="ts">`. Imports first, then reactive state, then computed, then functions.
+
+```vue
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { useImageStore } from '@/stores/imageStore'
+
+const store = useImageStore()
+
+// Reactive state
+const isLoading = ref(false)
+
+// Computed
+const hasImages = computed(() => store.images.length > 0)
+
+// Functions
+function handleAction() { ... }
+</script>
+
+<template>
+  <!-- Template content -->
+</template>
+
+<style scoped>
+/* Scoped styles */
+</style>
+```
+
+## Props & Emits
+
+Use `defineProps` and `defineEmits` with typed options:
+
+```typescript
+const props = defineProps<{
+  title: string
+  count?: number
+}>()
+
+const emit = defineEmits<{
+  (e: 'update', value: string): void
+  (e: 'delete'): void
+}>()
+```
+
+## Store Access
+
+Access store state and actions directly — no `storeToRefs` needed with setup stores:
+
+```typescript
+const store = useImageStore()
+const selectedImage = computed(() => store.selectedImage)
+```
+
+## v-model in Components
+
+For v-model, use `modelValue` prop + `update:modelValue` emit:
+
+```typescript
+const props = defineProps<{ modelValue: boolean }>()
+const emit = defineEmits<{ (e: 'update:modelValue', v: boolean): void }>()
+```
+
+## Key / v-for
+
+Always use `:key` with a stable identifier (not index):
+
+```html
+<div v-for="img in images" :key="img.id">
+```
+
+## Conditional Classes
+
+Use ternary or `&&` for dynamic classes:
+
+```html
+<div :class="isActive ? 'bg-primary-500' : 'bg-surface-100'">
+<div :class="['base-class', isActive && 'active']">
+```
+
+## Avoid
+
+- Options API (`data()`, `methods: {}`) — use Composition API
+- Untyped `ref`/`reactive` — always annotate
+- Inline arrow functions in templates for event handlers — extract to named functions
