@@ -1,7 +1,20 @@
 // Electron 主进程入口
-import { app, BrowserWindow, shell } from 'electron/main'
+import { app, BrowserWindow, net, protocol, shell } from 'electron/main'
+import { pathToFileURL } from 'url'
 import { join } from 'path'
 import { registerIpcHandlers, cleanup } from './ipc/handlers'
+
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'local-resource',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      corsEnabled: true
+    }
+  }
+])
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -12,7 +25,7 @@ function createWindow(): void {
     show: false,
     frame: false,
     titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 15, y: 10 },
+    trafficLightPosition: { x: 18, y: 13 },
     ...(process.platform === 'linux' ? { icon: join(__dirname, '../../build/icon.png') } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
@@ -41,6 +54,14 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  protocol.handle('local-resource', (request) => {
+    const filePath = new URL(request.url).searchParams.get('path')
+    if (!filePath) {
+      return new Response('Missing local resource path', { status: 400 })
+    }
+    return net.fetch(pathToFileURL(filePath).toString())
+  })
+
   // 注册 IPC 处理器
   registerIpcHandlers()
 

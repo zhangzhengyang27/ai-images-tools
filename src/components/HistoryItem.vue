@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { HistoryRecord } from '@/types'
+import { toLocalResourceUrl } from '@/utils/localResource'
 
 const props = defineProps<{
   record: HistoryRecord
@@ -46,7 +47,7 @@ const savedColorClass = computed(() => {
 })
 
 // 原图缩略图
-const thumbnailSrc = computed(() => `file://${props.record.originalPath}`)
+const thumbnailSrc = computed(() => toLocalResourceUrl(props.record.originalPath))
 
 // 格式化日期
 const formattedDate = computed(() => {

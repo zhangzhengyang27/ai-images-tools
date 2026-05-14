@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { ImageItem } from '@/types'
+import { toLocalResourceUrl } from '@/utils/localResource'
 
 const props = defineProps<{
   image: ImageItem
@@ -13,9 +14,9 @@ const formatFileSize = (bytes: number): string => {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`
 }
 
-const originalSrc = computed(() => `file://${props.image.originalPath}`)
+const originalSrc = computed(() => toLocalResourceUrl(props.image.originalPath))
 const compressedSrc = computed(
-  () => `file://${props.image.compressedPath || props.image.originalPath}`
+  () => toLocalResourceUrl(props.image.compressedPath || props.image.originalPath)
 )
 
 const originalSize = computed(() => formatFileSize(props.image.originalSize))

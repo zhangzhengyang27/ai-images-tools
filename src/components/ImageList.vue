@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useImageStore } from '@/stores/imageStore'
 import type { ImageItem } from '@/types'
+import { toLocalResourceUrl } from '@/utils/localResource'
 
 const imageStore = useImageStore()
 
@@ -143,7 +144,7 @@ const handleRemoveSelected = () => {
 
         <!-- Thumbnail -->
         <img
-          :src="`file://${image.originalPath}`"
+          :src="toLocalResourceUrl(image.originalPath)"
           :alt="image.name"
           class="img-item__thumb"
         />

@@ -29,11 +29,21 @@ export const useImageStore = defineStore('image', () => {
   // 已压缩完成的数量
   const compressedCount = ref(0)
 
+  // 当前正在压缩的图片
+  const currentCompressId = ref<string | null>(null)
+  const currentCompressName = ref('')
+
   // 列表多选
   const selectedIds = ref<string[]>([])
 
   // 排序方式
   const sortBy = ref<'added' | 'name' | 'size' | 'status'>('added')
+
+  // 上传/导入进度
+  const isImporting = ref(false)
+  const importedCount = ref(0)
+  const importTotal = ref(0)
+  const currentImportName = ref('')
 
   // 当前选中的图片
   const selectedImage = computed(() => {
@@ -236,7 +246,28 @@ export const useImageStore = defineStore('image', () => {
     batchProgress.value = 0
     compressingCount.value = 0
     compressedCount.value = 0
+    currentCompressId.value = null
+    currentCompressName.value = ''
     selectedIds.value = []
+  }
+
+  function startImport(total: number) {
+    isImporting.value = total > 0
+    importedCount.value = 0
+    importTotal.value = total
+    currentImportName.value = ''
+  }
+
+  function updateImportProgress(count: number, name: string) {
+    importedCount.value = Math.min(count, importTotal.value)
+    currentImportName.value = name
+  }
+
+  function finishImport() {
+    isImporting.value = false
+    importedCount.value = 0
+    importTotal.value = 0
+    currentImportName.value = ''
   }
 
   // 选择图片
@@ -265,6 +296,13 @@ export const useImageStore = defineStore('image', () => {
     compressingCount.value = count
     compressedCount.value = 0
     batchProgress.value = 0
+    currentCompressId.value = null
+    currentCompressName.value = ''
+  }
+
+  function setCurrentCompressImage(id: string | null) {
+    currentCompressId.value = id
+    currentCompressName.value = id ? images.value.find((image) => image.id === id)?.name || '' : ''
   }
 
   // 更新批量进度
@@ -277,6 +315,8 @@ export const useImageStore = defineStore('image', () => {
     compressedCount.value++
     if (compressedCount.value >= compressingCount.value) {
       isCompressing.value = false
+      currentCompressId.value = null
+      currentCompressName.value = ''
     }
   }
 
@@ -286,6 +326,8 @@ export const useImageStore = defineStore('image', () => {
     compressingCount.value = 0
     compressedCount.value = 0
     batchProgress.value = 0
+    currentCompressId.value = null
+    currentCompressName.value = ''
   }
 
   return {
@@ -297,8 +339,14 @@ export const useImageStore = defineStore('image', () => {
     batchProgress,
     compressingCount,
     compressedCount,
+    currentCompressId,
+    currentCompressName,
     selectedIds,
     sortBy,
+    isImporting,
+    importedCount,
+    importTotal,
+    currentImportName,
     // Computed
     selectedImage,
     pendingCount,
@@ -320,11 +368,15 @@ export const useImageStore = defineStore('image', () => {
     clearSelectedImageCompressOptions,
     removeImage,
     clearImages,
+    startImport,
+    updateImportProgress,
+    finishImport,
     selectImage,
     updateCompressOptions,
     setQuality,
     setOutputFormat,
     startCompressing,
+    setCurrentCompressImage,
     updateBatchProgress,
     finishOneCompress,
     stopCompressing

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { ImageItem } from '@/types'
+import { toLocalResourceUrl } from '@/utils/localResource'
 
 const props = defineProps<{
   image: ImageItem
@@ -16,9 +17,9 @@ const formatFileSize = (bytes: number): string => {
 
 const imageSrc = computed(() => {
   if (props.mode === 'compressed' && props.image.compressedPath) {
-    return `file://${props.image.compressedPath}`
+    return toLocalResourceUrl(props.image.compressedPath)
   }
-  return `file://${props.image.originalPath}`
+  return toLocalResourceUrl(props.image.originalPath)
 })
 
 const label = computed(() => {

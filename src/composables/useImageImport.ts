@@ -4,6 +4,7 @@ import type { ImageItem } from '@/types'
 
 const SUPPORTED_FORMATS = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif']
 const MAX_FILE_SIZE = 100 * 1024 * 1024
+let resetImportTimer: number | undefined
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substring(2)
 
@@ -15,7 +16,21 @@ const formatFileSize = (bytes: number): string => {
 
 const getFileName = (filePath: string) => filePath.split(/[\\/]/).pop() || filePath
 
-const validatePath = async (filePath: string): Promise<{ valid: boolean; error?: string }> => {
+const validatePath = async (
+  filePath: string
+): Promise<{
+  valid: boolean
+  data?: {
+    width: number
+    height: number
+    size: number
+    format: string
+    hasAlpha: boolean
+    path: string
+    name: string
+  }
+  error?: string
+}> => {
   const ext = filePath.split('.').pop()?.toLowerCase() || ''
   if (!SUPPORTED_FORMATS.includes(ext)) {
     return { valid: false, error: `不支持的格式: ${ext || getFileName(filePath)}` }
@@ -33,7 +48,7 @@ const validatePath = async (filePath: string): Promise<{ valid: boolean; error?:
     }
   }
 
-  return { valid: true }
+  return { valid: true, data: result.data }
 }
 
 export function useImageImport() {
@@ -48,35 +63,53 @@ export function useImageImport() {
     const images: ImageItem[] = []
     const errors: string[] = []
     let skippedCount = 0
+    let processedCount = 0
 
-    for (const filePath of uniquePaths) {
-      if (existingPaths.has(filePath)) {
-        skippedCount += 1
-        continue
+    if (resetImportTimer !== undefined) {
+      window.clearTimeout(resetImportTimer)
+      resetImportTimer = undefined
+    }
+
+    imageStore.startImport(uniquePaths.length)
+
+    try {
+      for (const filePath of uniquePaths) {
+        const fileName = getFileName(filePath)
+        imageStore.updateImportProgress(processedCount, fileName)
+
+        if (existingPaths.has(filePath)) {
+          skippedCount += 1
+          processedCount += 1
+          imageStore.updateImportProgress(processedCount, fileName)
+          continue
+        }
+
+        const validation = await validatePath(filePath)
+        if (!validation.valid || !validation.data) {
+          errors.push(validation.error || `${fileName} 验证失败`)
+          processedCount += 1
+          imageStore.updateImportProgress(processedCount, fileName)
+          continue
+        }
+
+        images.push({
+          id: generateId(),
+          name: validation.data.name,
+          originalPath: validation.data.path,
+          originalSize: validation.data.size,
+          originalWidth: validation.data.width,
+          originalHeight: validation.data.height,
+          format: validation.data.format,
+          status: 'pending'
+        })
+        processedCount += 1
+        imageStore.updateImportProgress(processedCount, fileName)
       }
-
-      const validation = await validatePath(filePath)
-      if (!validation.valid) {
-        errors.push(validation.error || `${getFileName(filePath)} 验证失败`)
-        continue
-      }
-
-      const result = await window.electronAPI.getImageInfo(filePath)
-      if (!result.success || !result.data) {
-        errors.push(`读取 ${getFileName(filePath)} 失败: ${result.error || '图片信息不可用'}`)
-        continue
-      }
-
-      images.push({
-        id: generateId(),
-        name: result.data.name,
-        originalPath: result.data.path,
-        originalSize: result.data.size,
-        originalWidth: result.data.width,
-        originalHeight: result.data.height,
-        format: result.data.format,
-        status: 'pending'
-      })
+    } finally {
+      resetImportTimer = window.setTimeout(() => {
+        imageStore.finishImport()
+        resetImportTimer = undefined
+      }, 300)
     }
 
     if (images.length > 0) {

@@ -14,7 +14,9 @@
     "build:unpack": "pnpm run build && electron-builder --dir",
     "build:win": "pnpm run build && electron-builder --win",
     "build:mac": "pnpm run build && electron-builder --mac",
-    "build:all": "pnpm run build && electron-builder --win --mac"
+    "build:all": "pnpm run build && electron-builder --win --mac",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^3.0.0",
@@ -35,6 +37,7 @@
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
     "vite": "^5.4.0",
+    "vitest": "^2.1.9",
     "@tailwindcss/vite": "^4.1.0"
   }
 }

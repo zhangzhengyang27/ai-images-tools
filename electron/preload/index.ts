@@ -64,6 +64,33 @@ const electronAPI = {
     return () => ipcRenderer.removeListener('compress:progress', handler)
   },
 
+  onCompressMemory: (
+    callback: (data: {
+      id?: string
+      phase: string
+      rss: number
+      heapUsed: number
+      external: number
+      arrayBuffers: number
+      warning: boolean
+    }) => void
+  ) => {
+    const handler = (
+      _: unknown,
+      data: {
+        id?: string
+        phase: string
+        rss: number
+        heapUsed: number
+        external: number
+        arrayBuffers: number
+        warning: boolean
+      }
+    ) => callback(data)
+    ipcRenderer.on('compress:memory', handler)
+    return () => ipcRenderer.removeListener('compress:memory', handler)
+  },
+
   // 结果监听
   onCompressResult: (
     callback: (data: {

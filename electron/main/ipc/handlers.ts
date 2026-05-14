@@ -1,7 +1,8 @@
 import { ipcMain, dialog, BrowserWindow, shell } from 'electron/main'
+import type { WebContents } from 'electron/main'
 import * as fs from 'fs/promises'
 import * as path from 'path'
-import { compressImage, getImageMetadata, cleanupTempFiles } from '../services/imageCompress'
+import { compressImage, getImageMetadata, cleanupTempFiles, cancelCompression } from '../services/imageCompress'
 import {
   loadHistory,
   addHistoryRecord,
@@ -14,8 +15,36 @@ import {
 
 // 取消标志
 let cancelRequested = false
+let activeCompressTaskId: string | null = null
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'])
+const MEMORY_WARNING_BYTES = 500 * 1024 * 1024
+
+interface CompressResultPayload {
+  id: string
+  compressedPath: string
+  compressedSize: number
+  compressedWidth: number
+  compressedHeight: number
+  compressedFormat: string
+  savedPercent: number
+}
+
+function getMemorySnapshot() {
+  const usage = process.memoryUsage()
+  return {
+    rss: usage.rss,
+    heapUsed: usage.heapUsed,
+    external: usage.external,
+    arrayBuffers: usage.arrayBuffers,
+    warning: usage.rss >= MEMORY_WARNING_BYTES
+  }
+}
+
+function sendMemoryUsage(sender: WebContents, phase: string, id?: string) {
+  const snapshot = getMemorySnapshot()
+  sender.send('compress:memory', { id, phase, ...snapshot })
+}
 
 async function collectImagePaths(inputPaths: string[]): Promise<string[]> {
   const result: string[] = []
@@ -155,16 +184,16 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(
     'file:save-to-path',
     async (_event, sourcePath: string, targetPath: string, options?: { avoidConflict?: boolean }) => {
-    try {
-      const finalPath = options?.avoidConflict ? await getAvailablePath(targetPath) : targetPath
-      await fs.copyFile(sourcePath, finalPath)
-      return { success: true, path: finalPath }
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : '保存文件失败'
+      try {
+        const finalPath = options?.avoidConflict ? await getAvailablePath(targetPath) : targetPath
+        await fs.copyFile(sourcePath, finalPath)
+        return { success: true, path: finalPath }
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : '保存文件失败'
+        }
       }
-    }
     }
   )
 
@@ -199,7 +228,7 @@ export function registerIpcHandlers(): void {
     'compress:start',
     async (
       event,
-        options: {
+      options: {
         id: string
         filePath: string
         quality: number
@@ -212,10 +241,12 @@ export function registerIpcHandlers(): void {
     ) => {
       try {
         cancelRequested = false
+        activeCompressTaskId = options.id
 
         // 获取原始文件大小
         const originalStats = await fs.stat(options.filePath)
         const originalSize = originalStats.size
+        sendMemoryUsage(event.sender, 'before', options.id)
 
         // 执行压缩
         const result = await compressImage(
@@ -232,8 +263,10 @@ export function registerIpcHandlers(): void {
             if (!cancelRequested) {
               event.sender.send('compress:progress', { id: options.id, progress })
             }
-          }
+          },
+          options.id
         )
+        sendMemoryUsage(event.sender, 'after', options.id)
 
         if (cancelRequested) {
           return { success: false, error: '已取消' }
@@ -244,8 +277,7 @@ export function registerIpcHandlers(): void {
           ? Math.round(((originalSize - result.size) / originalSize) * 100)
           : 0
 
-        // 发送结果
-        event.sender.send('compress:result', {
+        const payload: CompressResultPayload = {
           id: options.id,
           compressedPath: result.outputPath,
           compressedSize: result.size,
@@ -253,9 +285,10 @@ export function registerIpcHandlers(): void {
           compressedHeight: result.height,
           compressedFormat: result.format,
           savedPercent
-        })
+        }
 
-        return { success: true }
+        event.sender.send('compress:result', payload)
+        return { success: true, result: payload }
       } catch (error) {
         event.sender.send('compress:error', {
           id: options.id,
@@ -265,6 +298,8 @@ export function registerIpcHandlers(): void {
           success: false,
           error: error instanceof Error ? error.message : '压缩失败'
         }
+      } finally {
+        activeCompressTaskId = null
       }
     }
   )
@@ -274,7 +309,7 @@ export function registerIpcHandlers(): void {
     'compress:batch',
     async (
       event,
-        options: {
+      options: {
         images: Array<{
           id: string
           filePath: string
@@ -294,7 +329,8 @@ export function registerIpcHandlers(): void {
       }
     ) => {
       cancelRequested = false
-      const results: Array<{ id: string; success: boolean; error?: string }> = []
+      activeCompressTaskId = null
+      const results: Array<{ id: string; success: boolean; error?: string; result?: CompressResultPayload }> = []
 
       for (let i = 0; i < options.images.length; i++) {
         if (cancelRequested) {
@@ -315,6 +351,9 @@ export function registerIpcHandlers(): void {
           // 获取原始文件大小
           const originalStats = await fs.stat(image.filePath)
           const originalSize = originalStats.size
+          activeCompressTaskId = image.id
+          sendMemoryUsage(event.sender, 'before', image.id)
+          event.sender.send('compress:progress', { id: image.id, progress: 0 })
 
           // 执行压缩
           const result = await compressImage(
@@ -325,11 +364,13 @@ export function registerIpcHandlers(): void {
                 const totalProgress = Math.round(((i + progress / 100) / options.images.length) * 100)
                 event.sender.send('compress:progress', { id: 'batch', progress: totalProgress })
               }
-            }
+            },
+            image.id
           )
-
+          sendMemoryUsage(event.sender, 'after', image.id)
           if (cancelRequested) {
             results.push({ id: image.id, success: false, error: '已取消' })
+            activeCompressTaskId = null
             break
           }
 
@@ -338,8 +379,7 @@ export function registerIpcHandlers(): void {
             ? Math.round(((originalSize - result.size) / originalSize) * 100)
             : 0
 
-          // 发送单张结果
-          event.sender.send('compress:result', {
+          const payload: CompressResultPayload = {
             id: image.id,
             compressedPath: result.outputPath,
             compressedSize: result.size,
@@ -347,29 +387,37 @@ export function registerIpcHandlers(): void {
             compressedHeight: result.height,
             compressedFormat: result.format,
             savedPercent
-          })
+          }
 
-          results.push({ id: image.id, success: true })
+          event.sender.send('compress:result', payload)
+          results.push({ id: image.id, success: true, result: payload })
+          activeCompressTaskId = null
         } catch (error) {
+          const errorMessage = cancelRequested ? '已取消' : error instanceof Error ? error.message : '压缩失败'
+          activeCompressTaskId = null
           event.sender.send('compress:error', {
             id: image.id,
-            error: error instanceof Error ? error.message : '压缩失败'
+            error: errorMessage
           })
           results.push({
             id: image.id,
             success: false,
-            error: error instanceof Error ? error.message : '压缩失败'
+            error: errorMessage
           })
+          if (cancelRequested) {
+            break
+          }
         }
       }
 
-      return { success: true, results }
+      return { success: !cancelRequested, canceled: cancelRequested, results }
     }
   )
 
   // 取消压缩
   ipcMain.handle('compress:cancel', () => {
     cancelRequested = true
+    cancelCompression(activeCompressTaskId || undefined)
     return { success: true }
   })
 

@@ -3,6 +3,8 @@ import { computed, ref } from 'vue'
 import { useImageStore } from '@/stores/imageStore'
 import { useToast } from '@/composables/useToast'
 import { useHistory } from '@/composables/useHistory'
+import { buildCompressedName } from '@/utils/fileName'
+import type { CompressResultPayload } from '@/types'
 
 const imageStore = useImageStore()
 const { showToast } = useToast()
@@ -13,7 +15,15 @@ const hasPendingImages = computed(() => imageStore.pendingCount > 0)
 const hasDoneImages = computed(() => imageStore.doneCount > 0)
 const selectedImage = computed(() => imageStore.selectedImage)
 const isExporting = ref(false)
+const canSaveSelectedImage = computed(
+  () => !!selectedImage.value && selectedImage.value.status === 'done' && !imageStore.isCompressing
+)
+const canExportDoneImages = computed(
+  () => hasDoneImages.value && !imageStore.isCompressing && !isExporting.value
+)
 const exportProgress = ref({ done: 0, total: 0, retry: 0 })
+const memoryPeak = ref(0)
+const memoryWarningShown = ref(false)
 
 type StoreImage = (typeof imageStore.images)[number]
 
@@ -21,17 +31,51 @@ const getOptionsForImage = (image: StoreImage) => {
   return image.compressOptions || imageStore.compressOptions
 }
 
-const buildCompressedName = (name: string, format?: string) => {
-  const ext = format || 'jpg'
-  if (/\.[^.]+$/.test(name)) {
-    return name.replace(/\.[^.]+$/, `_compressed.${ext}`)
-  }
-  return `${name}_compressed.${ext}`
-}
-
 const getDirectoryName = (filePath: string) => {
   const index = Math.max(filePath.lastIndexOf('/'), filePath.lastIndexOf('\\'))
   return index >= 0 ? filePath.slice(0, index) : ''
+}
+
+const formatMemory = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(0)} MB`
+
+const applyCompressResult = async (data: CompressResultPayload) => {
+  // 找到对应的原始图片数据
+  const originalImage = imageStore.images.find((img) => img.id === data.id)
+
+  imageStore.updateImage(data.id, {
+    status: 'done',
+    compressedPath: data.compressedPath,
+    compressedSize: data.compressedSize,
+    compressedWidth: data.compressedWidth,
+    compressedHeight: data.compressedHeight,
+    compressedFormat: data.compressedFormat,
+    savedPercent: data.savedPercent,
+    progress: 100
+  })
+
+  // 自动写入历史记录
+  if (originalImage) {
+    await addRecordFromCompress({
+      image: {
+        id: originalImage.id,
+        name: originalImage.name,
+        originalPath: originalImage.originalPath,
+        originalSize: originalImage.originalSize,
+        originalWidth: originalImage.originalWidth,
+        originalHeight: originalImage.originalHeight,
+        format: originalImage.format
+      },
+      compressed: {
+        path: data.compressedPath,
+        name: originalImage.name.replace(/\.[^.]+$/, `_compressed.${data.compressedFormat}`),
+        size: data.compressedSize,
+        width: data.compressedWidth,
+        height: data.compressedHeight,
+        format: data.compressedFormat
+      },
+      options: getOptionsForImage(originalImage)
+    })
+  }
 }
 
 // 开始压缩
@@ -55,60 +99,44 @@ const startCompress = async () => {
 
   // 开始压缩
   imageStore.startCompressing(pendingImages.length)
+  memoryPeak.value = 0
+  memoryWarningShown.value = false
 
   // 注册进度监听
   const removeProgressListener = window.electronAPI.onCompressProgress((data) => {
     if (data.id === 'batch') {
       imageStore.updateBatchProgress(data.progress)
     } else {
+      imageStore.setCurrentCompressImage(data.id)
       imageStore.updateImage(data.id, { progress: data.progress, status: 'compressing' })
+    }
+  })
+
+  const removeMemoryListener = window.electronAPI.onCompressMemory((data) => {
+    memoryPeak.value = Math.max(memoryPeak.value, data.rss)
+    if (data.warning && !memoryWarningShown.value) {
+      memoryWarningShown.value = true
+      showToast(`内存占用较高：${formatMemory(data.rss)}，建议分批处理大图`, 'info')
     }
   })
 
   // 注册结果监听
   const removeResultListener = window.electronAPI.onCompressResult(async (data) => {
-    // 找到对应的原始图片数据
-    const originalImage = imageStore.images.find((img) => img.id === data.id)
-
-    imageStore.updateImage(data.id, {
-      status: 'done',
-      compressedPath: data.compressedPath,
-      compressedSize: data.compressedSize,
-      compressedWidth: data.compressedWidth,
-      compressedHeight: data.compressedHeight,
-      compressedFormat: data.compressedFormat,
-      savedPercent: data.savedPercent,
-      progress: 100
-    })
+    await applyCompressResult(data)
     imageStore.finishOneCompress()
-
-    // 自动写入历史记录
-    if (originalImage) {
-      await addRecordFromCompress({
-        image: {
-          id: originalImage.id,
-          name: originalImage.name,
-          originalPath: originalImage.originalPath,
-          originalSize: originalImage.originalSize,
-          originalWidth: originalImage.originalWidth,
-          originalHeight: originalImage.originalHeight,
-          format: originalImage.format
-        },
-        compressed: {
-          path: data.compressedPath,
-          name: originalImage.name.replace(/\.[^.]+$/, `_compressed.${data.compressedFormat}`),
-          size: data.compressedSize,
-          width: data.compressedWidth,
-          height: data.compressedHeight,
-          format: data.compressedFormat
-        },
-        options: getOptionsForImage(originalImage)
-      })
-    }
   })
 
   // 注册错误监听
   const removeErrorListener = window.electronAPI.onCompressError((data) => {
+    if (data.error === '已取消' || data.error === '压缩已取消') {
+      imageStore.updateImage(data.id, {
+        status: 'pending',
+        error: undefined,
+        progress: 0
+      })
+      return
+    }
+
     imageStore.updateImage(data.id, {
       status: 'error',
       error: data.error,
@@ -119,10 +147,12 @@ const startCompress = async () => {
   })
 
   try {
+    let succeeded = false
+
     if (pendingImages.length === 1) {
       const options = getOptionsForImage(pendingImages[0])
       // 单张压缩
-      await window.electronAPI.compressImage({
+      const response = await window.electronAPI.compressImage({
         id: pendingImages[0].id,
         filePath: pendingImages[0].originalPath,
         quality: options.quality,
@@ -132,9 +162,17 @@ const startCompress = async () => {
         maxWidth: options.maxWidth,
         maxHeight: options.maxHeight
       })
+      if (response.success && response.result) {
+        const image = imageStore.images.find((img) => img.id === response.result?.id)
+        if (image?.status !== 'done') {
+          await applyCompressResult(response.result)
+          imageStore.finishOneCompress()
+        }
+      }
+      succeeded = response.success
     } else {
       // 批量压缩
-      await window.electronAPI.compressBatch({
+      const response = await window.electronAPI.compressBatch({
         images: pendingImages.map((img) => ({
           id: img.id,
           filePath: img.originalPath,
@@ -147,13 +185,25 @@ const startCompress = async () => {
         maxWidth: imageStore.compressOptions.maxWidth,
         maxHeight: imageStore.compressOptions.maxHeight
       })
+      for (const item of response.results) {
+        if (!item.success || !item.result) continue
+        const image = imageStore.images.find((img) => img.id === item.id)
+        if (image?.status !== 'done') {
+          await applyCompressResult(item.result)
+          imageStore.finishOneCompress()
+        }
+      }
+      succeeded = response.success && !response.canceled && response.results.every((result) => result.success)
     }
 
-    showToast('压缩完成', 'success')
+    if (succeeded) {
+      showToast('压缩完成', 'success')
+    }
   } catch (error) {
     showToast(error instanceof Error ? error.message : '压缩失败', 'error')
   } finally {
     removeProgressListener()
+    removeMemoryListener()
     removeResultListener()
     removeErrorListener()
     if (imageStore.isCompressing) {
@@ -164,6 +214,11 @@ const startCompress = async () => {
 
 // 保存单张图片
 const saveImage = async () => {
+  if (imageStore.isCompressing) {
+    showToast('压缩进行中，完成后再保存', 'info')
+    return
+  }
+
   if (!selectedImage.value || selectedImage.value.status !== 'done') {
     showToast('请先压缩图片', 'error')
     return
@@ -194,6 +249,11 @@ const saveImage = async () => {
 
 // 批量导出
 const batchExport = async () => {
+  if (imageStore.isCompressing) {
+    showToast('压缩进行中，完成后再导出', 'info')
+    return
+  }
+
   const doneImages = imageStore.images.filter((img) => img.status === 'done')
 
   if (doneImages.length === 0) {
@@ -268,7 +328,7 @@ const batchExport = async () => {
     <div class="flex gap-2">
       <button
         class="btn btn-secondary flex-1 text-xs"
-        :disabled="!selectedImage || selectedImage.status !== 'done'"
+        :disabled="!canSaveSelectedImage"
         @click="saveImage"
       >
         <span>📥</span>
@@ -276,7 +336,7 @@ const batchExport = async () => {
       </button>
       <button
         class="btn btn-secondary flex-1 text-xs"
-        :disabled="!hasDoneImages || isExporting"
+        :disabled="!canExportDoneImages"
         @click="batchExport"
       >
         <template v-if="isExporting">
@@ -294,6 +354,9 @@ const batchExport = async () => {
     <div class="text-[10px] text-surface-400 text-center">
       <span v-if="isExporting">
         正在导出，已重试 {{ exportProgress.retry }} 次
+      </span>
+      <span v-else-if="memoryPeak > 0">
+        本轮内存高水位 {{ formatMemory(memoryPeak) }}
       </span>
       <span v-else>压缩过程完全本地执行，不上传任何数据</span>
     </div>

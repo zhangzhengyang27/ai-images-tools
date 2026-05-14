@@ -14,7 +14,6 @@ const progressPercent = computed(() => {
 
 const handleCancel = async () => {
   await window.electronAPI.cancelCompress()
-  imageStore.stopCompressing()
 }
 </script>
 

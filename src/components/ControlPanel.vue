@@ -5,6 +5,7 @@ import FormatSelector from './FormatSelector.vue'
 import ScaleAdjuster from './ScaleAdjuster.vue'
 import ImageInfo from './ImageInfo.vue'
 import ActionButtons from './ActionButtons.vue'
+import CurrentCompressStatus from './CurrentCompressStatus.vue'
 
 const imageStore = useImageStore()
 </script>
@@ -21,6 +22,8 @@ const imageStore = useImageStore()
 
     <!-- Scrollable Content -->
     <div class="flex-1 overflow-y-auto px-[18px] py-4">
+      <CurrentCompressStatus />
+
       <!-- Quality Section -->
       <QualitySlider />
 

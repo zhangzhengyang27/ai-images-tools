@@ -6,6 +6,7 @@ import { readdir, unlink } from 'fs/promises'
 
 // 支持的图片格式
 const SUPPORTED_FORMATS = ['jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif']
+const activePipelines = new Map<string, sharp.Sharp>()
 
 // 临时目录
 const getTempDir = () => {
@@ -22,6 +23,16 @@ export async function cleanupTempFiles(): Promise<void> {
     await Promise.all(files.map((file) => unlink(join(tempDir, file))))
   } catch {
     // 忽略错误
+  }
+}
+
+export function cancelCompression(taskId?: string): void {
+  const entries = taskId
+    ? Array.from(activePipelines.entries()).filter(([id]) => id === taskId)
+    : Array.from(activePipelines.entries())
+
+  for (const [, pipeline] of entries) {
+    pipeline.destroy(new Error('压缩已取消'))
   }
 }
 
@@ -56,7 +67,8 @@ export async function compressImage(
     maxWidth?: number
     maxHeight?: number
   },
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  taskId = `${Date.now()}-${Math.random().toString(36).substring(2, 8)}`
 ): Promise<{
   outputPath: string
   width: number
@@ -149,20 +161,23 @@ export async function compressImage(
   onProgress?.(50)
 
   // 执行压缩
-  await pipeline.toFile(outputPath)
-
+  activePipelines.set(taskId, pipeline)
   onProgress?.(90)
-
-  // 获取压缩后的元数据
-  const resultMetadata = await sharp(outputPath).metadata()
-
-  onProgress?.(100)
+  let outputInfo: sharp.OutputInfo
+  try {
+    outputInfo = await pipeline.toFile(outputPath)
+  } catch (error) {
+    await unlink(outputPath).catch(() => undefined)
+    throw error
+  } finally {
+    activePipelines.delete(taskId)
+  }
 
   return {
     outputPath,
-    width: resultMetadata.width || 0,
-    height: resultMetadata.height || 0,
-    size: resultMetadata.size || 0,
+    width: outputInfo.width || 0,
+    height: outputInfo.height || 0,
+    size: outputInfo.size || 0,
     format: outputFormat
   }
 }

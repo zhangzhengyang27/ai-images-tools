@@ -70,6 +70,16 @@ export interface CompressOptions {
   maxHeight?: number
 }
 
+export interface CompressResultPayload {
+  id: string
+  compressedPath: string
+  compressedSize: number
+  compressedWidth: number
+  compressedHeight: number
+  compressedFormat: string
+  savedPercent: number
+}
+
 // Electron API 类型
 export interface ElectronAPI {
   minimize: () => void
@@ -107,7 +117,7 @@ export interface ElectronAPI {
     scalePercent?: number
     maxWidth?: number
     maxHeight?: number
-  }) => Promise<{ success: boolean; error?: string }>
+  }) => Promise<{ success: boolean; result?: CompressResultPayload; error?: string }>
   compressBatch: (options: {
     images: Array<{
       id: string
@@ -125,7 +135,11 @@ export interface ElectronAPI {
     scalePercent?: number
     maxWidth?: number
     maxHeight?: number
-  }) => Promise<{ success: boolean; results: Array<{ id: string; success: boolean; error?: string }> }>
+  }) => Promise<{
+    success: boolean
+    canceled?: boolean
+    results: Array<{ id: string; success: boolean; error?: string; result?: CompressResultPayload }>
+  }>
   cancelCompress: () => Promise<{ success: boolean }>
   saveToPath: (
     compressedPath: string,
@@ -135,17 +149,18 @@ export interface ElectronAPI {
   openPath: (targetPath: string) => Promise<{ success: boolean; error?: string }>
   fileExists: (targetPath: string) => Promise<{ success: boolean; exists: boolean; error?: string }>
   onCompressProgress: (callback: (data: { id: string; progress: number }) => void) => () => void
-  onCompressResult: (
+  onCompressMemory: (
     callback: (data: {
-      id: string
-      compressedPath: string
-      compressedSize: number
-      compressedWidth: number
-      compressedHeight: number
-      compressedFormat: string
-      savedPercent: number
+      id?: string
+      phase: string
+      rss: number
+      heapUsed: number
+      external: number
+      arrayBuffers: number
+      warning: boolean
     }) => void
   ) => () => void
+  onCompressResult: (callback: (data: CompressResultPayload) => void) => () => void
   onCompressError: (callback: (data: { id: string; error: string }) => void) => () => void
   // 历史记录
   loadHistory: () => Promise<{ success: boolean; records: HistoryRecord[]; error?: string }>
