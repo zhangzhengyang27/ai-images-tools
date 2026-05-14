@@ -1,0 +1,1349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>图片压缩工具 — 布局原型</title>
+
+  <!-- PrimeIcons & Fonts -->
+  <link rel="stylesheet" href="https://unpkg.com/primeicons/primeicons.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS Play CDN (for prototype only) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'Noto Sans SC', 'sans-serif'],
+          },
+          colors: {
+            primary: {
+              50:  '#f0f9ff',  100: '#e0f2fe',  200: '#bae6fd',
+              300: '#7dd3fc',  400: '#38bdf8',  500: '#0ea5e9',
+              600: '#0284c7',  700: '#0369a1',  800: '#075985',
+              900: '#0c4a6e',
+            },
+            surface: {
+              0:   '#ffffff',  50:  '#fafafa',  100: '#f5f5f5',
+              200: '#eaeaec',  300: '#d5d5d6',  400: '#b5b5b6',
+              500: '#979899',  600: '#78797b',  700: '#5c5d5e',
+              800: '#464748',  900: '#1c1c1e',
+            },
+          },
+        },
+      },
+    }
+  </script>
+
+  <style>
+    /* ── Base Reset ───────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0;
+      height: 100%; overflow: hidden;
+      font-family: 'Inter', 'Noto Sans SC', sans-serif;
+      background: #f5f5f5;
+      color: #1c1c1e;
+      -webkit-font-smoothing: antialiased;
+    }
+    button { cursor: pointer; font-family: inherit; }
+    img { display: block; }
+
+    /* ── Scrollbar ────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d5d5d6; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #b5b5b6; }
+
+    /* ── Title Bar ────────────────────────────────── */
+    .title-bar {
+      -webkit-app-region: drag;
+      height: 38px;
+      background: #1c1c1e;
+      display: flex; align-items: center;
+      padding: 0 12px;
+      user-select: none;
+      flex-shrink: 0;
+    }
+    .title-bar__title {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 500;
+      color: rgba(255,255,255,0.85);
+      letter-spacing: 0.02em;
+    }
+    .title-bar__controls {
+      -webkit-app-region: no-drag;
+      display: flex; gap: 8px;
+    }
+    .title-bar__btn {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      border: none; outline: none;
+      transition: opacity 0.15s;
+    }
+    .title-bar__btn:hover { opacity: 0.8; }
+    .btn-close { background: #ff5f57; }
+    .btn-min   { background: #febc2e; }
+    .btn-max   { background: #28c840; }
+
+    /* ── Upload Zone ──────────────────────────────── */
+    .upload-zone {
+      border: 2px dashed #d5d5d6;
+      border-radius: 12px;
+      padding: 32px 20px;
+      text-align: center;
+      color: #78797b;
+      transition: border-color 0.2s, background 0.2s;
+      cursor: pointer;
+    }
+    .upload-zone:hover, .upload-zone.drag-over {
+      border-color: #0ea5e9;
+      background: #f0f9ff;
+      color: #0284c7;
+    }
+    .upload-zone__icon { font-size: 40px; margin-bottom: 10px; }
+    .upload-zone__title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .upload-zone__hint { font-size: 12px; }
+
+    /* ── Image List Item ──────────────────────────── */
+    .img-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+      border: 2px solid transparent;
+    }
+    .img-item:hover { background: #f5f5f5; }
+    .img-item.selected { background: #e0f2fe; border-color: #0ea5e9; }
+    .img-item__thumb {
+      width: 44px; height: 44px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: #eaeaec;
+      flex-shrink: 0;
+    }
+    .img-item__info { flex: 1; min-width: 0; }
+    .img-item__name {
+      font-size: 12px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      color: #1c1c1e;
+    }
+    .img-item__meta { font-size: 11px; color: #78797b; margin-top: 2px; }
+    .img-item__badge { flex-shrink: 0; }
+
+    /* ── Status Badge ─────────────────────────────── */
+    .badge {
+      display: inline-flex; align-items: center;
+      padding: 2px 8px; border-radius: 99px;
+      font-size: 10px; font-weight: 600; letter-spacing: 0.03em;
+    }
+    .badge-pending  { background: #f5f5f5; color: #78797b; }
+    .badge-done     { background: #dcfce7; color: #15803d; }
+    .badge-error    { background: #fee2e2; color: #dc2626; }
+    .badge-compress { background: #dbeafe; color: #1d4ed8; }
+
+    /* ── Compare View ─────────────────────────────── */
+    .compare-container {
+      display: flex; gap: 2px;
+      background: #eaeaec;
+      border-radius: 10px; overflow: hidden;
+      position: relative;
+    }
+    .compare-panel {
+      flex: 1; display: flex; flex-direction: column;
+      background: #fff;
+      min-width: 0;
+    }
+    .compare-label {
+      padding: 6px 12px;
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.06em;
+      color: #78797b;
+      background: #fafafa;
+      border-bottom: 1px solid #eaeaec;
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .compare-label .size-tag {
+      font-size: 10px; font-weight: 500; color: #0ea5e9;
+      background: #e0f2fe; padding: 1px 6px; border-radius: 4px;
+    }
+    .compare-img-wrap {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; padding: 8px;
+      min-height: 300px;
+    }
+    .compare-img-wrap img {
+      max-width: 100%; max-height: 100%;
+      object-fit: contain;
+      border-radius: 4px;
+      transition: transform 0.1s;
+    }
+    .compare-slider-wrap {
+      position: relative; flex: 1; overflow: hidden;
+    }
+    .compare-slider-img {
+      position: absolute; top: 0; left: 0;
+      width: 100%; height: 100%;
+      object-fit: contain;
+    }
+    .compare-slider-divider {
+      position: absolute; top: 0; left: 50%;
+      transform: translateX(-50%);
+      width: 3px; height: 100%;
+      background: #0ea5e9; cursor: col-resize; z-index: 2;
+      box-shadow: 0 0 6px rgba(14,165,233,0.5);
+    }
+    .compare-slider-divider::before {
+      content: ''; position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 28px; height: 28px;
+      background: #0ea5e9; border-radius: 50%;
+      border: 3px solid #fff;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .compare-slider-divider::after {
+      content: '◀ ▶'; position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      font-size: 8px; color: #fff;
+      letter-spacing: -1px;
+      white-space: nowrap;
+    }
+
+    /* ── Info Row ─────────────────────────────────── */
+    .info-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 13px;
+    }
+    .info-row:last-child { border-bottom: none; }
+    .info-row__label { color: #78797b; font-size: 12px; }
+    .info-row__value { font-weight: 500; color: #1c1c1e; }
+    .info-row__value.highlight { color: #0ea5e9; font-size: 15px; font-weight: 700; }
+    .info-row__value.saved { color: #16a34a; font-size: 15px; font-weight: 700; }
+
+    /* ── Progress Bar ──────────────────────────────── */
+    .progress-track {
+      height: 6px; background: #eaeaec; border-radius: 3px; overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%; background: linear-gradient(90deg, #0ea5e9, #38bdf8);
+      border-radius: 3px;
+      transition: width 0.3s ease;
+    }
+    .progress-fill.indeterminate {
+      width: 40% !important;
+      animation: indeterminate 1.5s ease-in-out infinite;
+    }
+    @keyframes indeterminate {
+      0%   { transform: translateX(-150%); }
+      100% { transform: translateX(350%); }
+    }
+
+    /* ── Slider (Quality) ──────────────────────────── */
+    .qslider-wrap { position: relative; padding: 8px 0; }
+    .qslider {
+      -webkit-appearance: none; appearance: none;
+      width: 100%; height: 4px;
+      border-radius: 2px; background: #eaeaec; outline: none;
+      cursor: pointer;
+    }
+    .qslider::-webkit-slider-thumb {
+      -webkit-appearance: none; appearance: none;
+      width: 18px; height: 18px;
+      border-radius: 50%; background: #0ea5e9;
+      border: 3px solid #fff;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+      cursor: pointer;
+    }
+    .qslider::-webkit-slider-thumb:hover { transform: scale(1.15); }
+    .qslider-labels {
+      display: flex; justify-content: space-between;
+      margin-top: 4px; font-size: 10px; color: #78797b;
+    }
+
+    /* ── Format Chip Selector ─────────────────────── */
+    .fmt-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+    .fmt-chip {
+      padding: 5px 12px; border-radius: 6px;
+      border: 1.5px solid #eaeaec;
+      background: #fff; color: #5c5d5e;
+      font-size: 12px; font-weight: 500;
+      cursor: pointer; transition: all 0.15s;
+    }
+    .fmt-chip:hover { border-color: #0ea5e9; color: #0ea5e9; }
+    .fmt-chip.active {
+      border-color: #0ea5e9; background: #e0f2fe; color: #0284c7; font-weight: 600;
+    }
+
+    /* ── Buttons ──────────────────────────────────── */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px;
+      font-size: 13px; font-weight: 600;
+      border: none; outline: none; transition: all 0.15s;
+      white-space: nowrap;
+    }
+    .btn-primary {
+      background: #0ea5e9; color: #fff;
+      box-shadow: 0 1px 3px rgba(14,165,233,0.3);
+    }
+    .btn-primary:hover { background: #0284c7; box-shadow: 0 3px 8px rgba(14,165,233,0.4); }
+    .btn-primary:active { transform: scale(0.97); }
+    .btn-primary:disabled { background: #bae6fd; color: #7dd3fc; cursor: not-allowed; box-shadow: none; }
+    .btn-secondary {
+      background: #fff; color: #1c1c1e;
+      border: 1.5px solid #eaeaec;
+    }
+    .btn-secondary:hover { border-color: #0ea5e9; color: #0ea5e9; }
+    .btn-danger { background: #fee2e2; color: #dc2626; }
+    .btn-danger:hover { background: #fecaca; }
+    .btn-ghost { background: transparent; color: #5c5d5e; padding: 6px 10px; }
+    .btn-ghost:hover { background: #f5f5f5; color: #1c1c1e; }
+    .btn-icon {
+      width: 30px; height: 30px; border-radius: 6px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: none; color: #78797b;
+      transition: all 0.15s; font-size: 14px;
+    }
+    .btn-icon:hover { background: #f5f5f5; color: #1c1c1e; }
+
+    /* ── Tooltip ──────────────────────────────────── */
+    [data-tooltip] { position: relative; }
+    [data-tooltip]::after {
+      content: attr(data-tooltip);
+      position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%);
+      background: #1c1c1e; color: #fff; font-size: 11px; font-weight: 500;
+      padding: 4px 8px; border-radius: 5px; white-space: nowrap;
+      opacity: 0; pointer-events: none; transition: opacity 0.15s;
+      z-index: 100;
+    }
+    [data-tooltip]:hover::after { opacity: 1; }
+
+    /* ── Card ─────────────────────────────────────── */
+    .card {
+      background: #fff; border-radius: 12px;
+      border: 1px solid #eaeaec;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    /* ── Section Title ────────────────────────────── */
+    .section-title {
+      font-size: 11px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.08em; color: #78797b;
+      margin-bottom: 10px;
+    }
+
+    /* ── Empty State ──────────────────────────────── */
+    .empty-state {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 48px 24px; text-align: center; color: #b5b5b6;
+    }
+    .empty-state__icon { font-size: 56px; margin-bottom: 12px; }
+    .empty-state__title { font-size: 14px; font-weight: 600; color: #78797b; margin-bottom: 4px; }
+    .empty-state__hint { font-size: 12px; color: #b5b5b6; }
+
+    /* ── Tab Strip ────────────────────────────────── */
+    .tab-strip { display: flex; gap: 2px; padding: 4px; background: #f5f5f5; border-radius: 8px; }
+    .tab-btn {
+      flex: 1; padding: 6px 12px; border-radius: 6px; border: none;
+      font-size: 12px; font-weight: 600; color: #78797b;
+      background: transparent; transition: all 0.15s; cursor: pointer;
+    }
+    .tab-btn.active { background: #fff; color: #0ea5e9; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+
+    /* ── Toast ────────────────────────────────────── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 12px 18px; border-radius: 10px;
+      font-size: 13px; font-weight: 500;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      z-index: 9999;
+      animation: toastIn 0.3s ease;
+    }
+    .toast-success { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+    .toast-error   { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .toast-info    { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+    @keyframes toastIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to   { transform: translateY(0); opacity: 1; }
+    }
+
+    /* ── Drag Overlay ──────────────────────────────── */
+    .drag-overlay {
+      position: fixed; inset: 0; z-index: 9998;
+      background: rgba(14,165,233,0.08);
+      border: 3px dashed #0ea5e9;
+      border-radius: 16px; margin: 8px;
+      display: flex; align-items: center; justify-content: center;
+      pointer-events: none;
+      animation: fadeIn 0.2s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .drag-overlay__box {
+      background: #fff; padding: 24px 40px; border-radius: 16px;
+      box-shadow: 0 8px 32px rgba(14,165,233,0.2);
+      text-align: center; color: #0284c7;
+    }
+    .drag-overlay__icon { font-size: 48px; margin-bottom: 8px; }
+    .drag-overlay__title { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+    .drag-overlay__hint { font-size: 13px; color: #78797b; }
+
+    /* ── Separator ────────────────────────────────── */
+    .sep { height: 1px; background: #f0f0f0; margin: 12px 0; }
+
+    /* ── Spinner ──────────────────────────────────── */
+    .spinner {
+      width: 18px; height: 18px; border-radius: 50%;
+      border: 2px solid #eaeaec;
+      border-top-color: #0ea5e9;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Zoom Controls ─────────────────────────────── */
+    .zoom-controls {
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 10px; background: #fafafa;
+      border-radius: 8px; border: 1px solid #eaeaec;
+      font-size: 12px; color: #5c5d5e;
+    }
+    .zoom-controls .btn-icon { width: 24px; height: 24px; font-size: 12px; }
+    .zoom-val { font-weight: 600; min-width: 36px; text-align: center; color: #0284c7; }
+
+    /* ── Compare Mode Toggle ───────────────────────── */
+    .mode-toggle {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 12px; background: #f5f5f5; border-radius: 8px;
+      font-size: 12px; color: #5c5d5e;
+    }
+    .mode-toggle-btn {
+      padding: 4px 10px; border-radius: 5px; border: none;
+      font-size: 11px; font-weight: 600; background: transparent;
+      color: #78797b; cursor: pointer; transition: all 0.15s;
+    }
+    .mode-toggle-btn.active { background: #0ea5e9; color: #fff; }
+
+    /* ── Preset Buttons ────────────────────────────── */
+    .preset-row { display: flex; gap: 6px; margin-bottom: 12px; }
+    .preset-btn {
+      flex: 1; padding: 5px 0; border-radius: 6px; border: 1.5px solid #eaeaec;
+      font-size: 11px; font-weight: 600; color: #78797b;
+      background: #fff; cursor: pointer; transition: all 0.15s;
+    }
+    .preset-btn:hover { border-color: #0ea5e9; color: #0ea5e9; }
+    .preset-btn.active { border-color: #0ea5e9; background: #e0f2fe; color: #0284c7; }
+
+    /* ── File Size Bar ─────────────────────────────── */
+    .size-bar { display: flex; gap: 8px; align-items: center; }
+    .size-bar__orig {
+      flex: 1; height: 8px; background: #eaeaec; border-radius: 4px; overflow: hidden;
+    }
+    .size-bar__fill-orig  { height: 100%; background: #78797b; }
+    .size-bar__comp {
+      flex: 1; height: 8px; background: #eaeaec; border-radius: 4px; overflow: hidden;
+    }
+    .size-bar__fill-comp  { height: 100%; background: linear-gradient(90deg,#0ea5e9,#38bdf8); }
+    .size-bar__arrow { font-size: 14px; color: #0ea5e9; }
+  </style>
+</head>
+<body>
+
+  <!-- ════════════════════════════════════════════════════
+       APP SHELL
+  ════════════════════════════════════════════════════ -->
+  <div id="app" style="display:flex;flex-direction:column;height:100vh;overflow:hidden;">
+
+    <!-- ── Title Bar ───────────────────────────────── -->
+    <div class="title-bar">
+      <div class="title-bar__title">图片压缩工具</div>
+      <div class="title-bar__controls">
+        <button class="title-bar__btn btn-min"   data-tooltip="最小化" onclick=""></button>
+        <button class="title-bar__btn btn-max"   data-tooltip="最大化" onclick=""></button>
+        <button class="title-bar__btn btn-close" data-tooltip="关闭"   onclick=""></button>
+      </div>
+    </div>
+
+    <!-- ── Main Content ────────────────────────────── -->
+    <div style="flex:1;display:flex;overflow:hidden;">
+
+      <!-- ════════════════════════════════════════════
+           LEFT SIDEBAR
+      ════════════════════════════════════════════ -->
+      <div style="width:280px;flex-shrink:0;display:flex;flex-direction:column;overflow:hidden;border-right:1px solid #eaeaec;background:#fff;">
+
+        <!-- Sidebar Header -->
+        <div style="padding:16px 16px 0;flex-shrink:0;">
+          <div class="upload-zone" id="uploadZone" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-zone__icon">📁</div>
+            <div class="upload-zone__title">点击上传图片</div>
+            <div class="upload-zone__hint">或拖拽文件到此处</div>
+            <div class="upload-zone__hint" style="margin-top:4px;font-size:11px;color:#b5b5b6;">支持 JPG · PNG · WebP · BMP · GIF</div>
+          </div>
+          <input type="file" id="fileInput" multiple accept="image/*" style="display:none" />
+        </div>
+
+        <!-- Image List -->
+        <div style="flex:1;overflow-y:auto;padding:12px 16px;">
+
+          <!-- List Header -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#78797b;">
+              图片列表 <span id="imgCount" style="background:#f5f5f5;color:#5c5d5e;padding:1px 6px;border-radius:10px;font-size:10px;">2</span>
+            </div>
+            <button class="btn-ghost" style="font-size:11px;padding:3px 8px;" onclick="showToast('已清空列表','info')">清空全部</button>
+          </div>
+
+          <!-- Image Item 1 (done state) -->
+          <div class="img-item selected" id="item1" onclick="selectItem('item1')">
+            <img class="img-item__thumb" src="https://picsum.photos/id/10/80/80" alt="缩略图" />
+            <div class="img-item__info">
+              <div class="img-item__name">landscape.jpg</div>
+              <div class="img-item__meta">1920×1280 · 2.4 MB</div>
+            </div>
+            <div class="img-item__badge">
+              <span class="badge badge-done">已压缩</span>
+            </div>
+          </div>
+
+          <!-- Image Item 2 (pending state) -->
+          <div class="img-item" id="item2" onclick="selectItem('item2')" style="margin-top:4px;">
+            <img class="img-item__thumb" src="https://picsum.photos/id/20/80/80" alt="缩略图" />
+            <div class="img-item__info">
+              <div class="img-item__name">workspace.png</div>
+              <div class="img-item__meta">2560×1600 · 5.1 MB</div>
+            </div>
+            <div class="img-item__badge">
+              <span class="badge badge-pending">待处理</span>
+            </div>
+          </div>
+
+          <!-- Image Item 3 (compressing state) -->
+          <div class="img-item" id="item3" onclick="selectItem('item3')" style="margin-top:4px;">
+            <img class="img-item__thumb" src="https://picsum.photos/id/30/80/80" alt="缩略图" />
+            <div class="img-item__info">
+              <div class="img-item__name">office_photo.webp</div>
+              <div class="img-item__meta">3840×2160 · 8.7 MB</div>
+            </div>
+            <div class="img-item__badge">
+              <div style="display:flex;align-items:center;gap:5px;">
+                <div class="spinner"></div>
+                <span class="badge badge-compress" style="font-size:9px;padding:1px 5px;">67%</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Image Item 4 (error state) -->
+          <div class="img-item" id="item4" onclick="selectItem('item4')" style="margin-top:4px;">
+            <img class="img-item__thumb" src="https://picsum.photos/id/40/80/80" alt="缩略图" />
+            <div class="img-item__info">
+              <div class="img-item__name">draft_final_v3.jpg</div>
+              <div class="img-item__meta" style="color:#dc2626;">文件损坏</div>
+            </div>
+            <div class="img-item__badge">
+              <span class="badge badge-error">失败</span>
+            </div>
+          </div>
+
+        </div><!-- /image list -->
+
+        <!-- Sidebar Footer Actions -->
+        <div style="padding:12px 16px;border-top:1px solid #f0f0f0;flex-shrink:0;display:flex;gap:8px;">
+          <button class="btn btn-secondary" style="flex:1;font-size:12px;" onclick="showToast('批量导出','info')">
+            <i class="pi pi-download" style="font-size:12px;"></i> 导出全部
+          </button>
+          <button class="btn btn-danger" style="font-size:12px;" onclick="showToast('已清空','info')">
+            <i class="pi pi-trash" style="font-size:12px;"></i>
+          </button>
+        </div>
+      </div><!-- /sidebar -->
+
+
+      <!-- ════════════════════════════════════════════
+           CENTER MAIN AREA
+      ════════════════════════════════════════════ -->
+      <div style="flex:1;display:flex;flex-direction:column;overflow:hidden;background:#fafafa;">
+
+        <!-- Main Toolbar -->
+        <div style="padding:10px 20px;background:#fff;border-bottom:1px solid #eaeaec;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+          <button class="btn btn-ghost" onclick="showToast('已撤销','info')" data-tooltip="撤销">
+            <i class="pi pi-undo"></i>
+          </button>
+          <button class="btn btn-ghost" onclick="showToast('已重做','info')" data-tooltip="重做">
+            <i class="pi pi-replay"></i>
+          </button>
+          <div style="width:1px;height:20px;background:#eaeaec;margin:0 4px;"></div>
+          <button class="btn btn-ghost" onclick="showToast('放大','info')" data-tooltip="放大">
+            <i class="pi pi-search-plus"></i>
+          </button>
+          <button class="btn btn-ghost" onclick="showToast('缩小','info')" data-tooltip="缩小">
+            <i class="pi pi-search-minus"></i>
+          </button>
+          <button class="btn btn-ghost" onclick="showToast('适应窗口','info')" data-tooltip="适应窗口">
+            <i class="pi pi-expand"></i>
+          </button>
+
+          <!-- History Button -->
+          <button class="btn btn-ghost" onclick="toggleHistoryDrawer()" data-tooltip="压缩历史" id="historyBtn" style="position:relative;">
+            <i class="pi pi-history"></i>
+            <span style="position:absolute;top:2px;right:2px;width:8px;height:8px;background:#0ea5e9;border-radius:50%;border:1.5px solid #fff;" id="historyBadge"></span>
+          </button>
+
+          <!-- View Mode Tabs -->
+          <div class="tab-strip" style="margin-left:auto;">
+            <button class="tab-btn active" onclick="setViewMode(this,'compare')">对比视图</button>
+            <button class="tab-btn"        onclick="setViewMode(this,'original')">原图</button>
+            <button class="tab-btn"        onclick="setViewMode(this,'compressed')">压缩图</button>
+          </div>
+        </div>
+
+        <!-- Compare / Preview Area -->
+        <div style="flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:16px;" id="previewArea">
+
+          <!-- Compare Panels: Side by Side -->
+          <div class="compare-container" id="compareSideBySide" style="flex:1;min-height:0;">
+            <!-- Original Panel -->
+            <div class="compare-panel">
+              <div class="compare-label">
+                <span>📄 原图</span>
+                <span class="size-tag">2.4 MB</span>
+              </div>
+              <div class="compare-img-wrap" id="origWrap">
+                <img src="https://picsum.photos/id/10/600/400" alt="原图" draggable="false" />
+              </div>
+            </div>
+
+            <!-- Slider Compare Panel -->
+            <div style="position:relative;flex:1;display:flex;flex-direction:column;background:#fff;">
+              <div class="compare-label">
+                <span>⚡ 压缩图</span>
+                <span>
+                  <span style="color:#16a34a;font-weight:700;">节省 68%</span>
+                  <span class="size-tag">772 KB</span>
+                </span>
+              </div>
+              <div class="compare-img-wrap" id="sliderWrap" style="position:relative;overflow:hidden;">
+                <!-- Compressed (background / right side) -->
+                <img src="https://picsum.photos/id/10/600/400?blur=1" alt="压缩图" class="compare-slider-img" style="position:absolute;top:0;left:0;width:100%;height:100%;object-fit:contain;" />
+                <!-- Original (foreground / clipped left) -->
+                <div id="sliderClipLeft" style="position:absolute;top:0;left:0;width:50%;height:100%;overflow:hidden;z-index:1;">
+                  <img src="https://picsum.photos/id/10/600/400" alt="原图-滑动" style="position:absolute;top:0;left:0;width:200%;height:100%;object-fit:contain;" />
+                </div>
+                <!-- Divider -->
+                <div id="sliderDivider" style="position:absolute;top:0;left:50%;width:3px;height:100%;background:#0ea5e9;cursor:col-resize;z-index:3;box-shadow:0 0 6px rgba(14,165,233,0.5);" onmousedown="startDrag(event)"></div>
+              </div>
+            </div>
+          </div><!-- /compare container -->
+
+          <!-- Zoom Controls Bar -->
+          <div style="display:flex;align-items:center;gap:12px;padding:8px 12px;background:#fff;border-radius:10px;border:1px solid #eaeaec;flex-shrink:0;">
+            <div class="zoom-controls">
+              <button class="btn-icon" onclick="zoom(-0.1)" data-tooltip="缩小"><i class="pi pi-minus"></i></button>
+              <span class="zoom-val" id="zoomVal">100%</span>
+              <button class="btn-icon" onclick="zoom(0.1)" data-tooltip="放大"><i class="pi pi-plus"></i></button>
+              <div style="width:1px;height:14px;background:#eaeaec;margin:0 2px;"></div>
+              <button class="btn-icon" onclick="zoomReset()" data-tooltip="重置"><i class="pi pi-refresh"></i></button>
+            </div>
+            <div class="mode-toggle">
+              <span>对比模式：</span>
+              <button class="mode-toggle-btn active">并排</button>
+              <button class="mode-toggle-btn">滑动</button>
+              <button class="mode-toggle-btn">叠加</button>
+            </div>
+            <div style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:#78797b;">
+              <i class="pi pi-info-circle"></i>
+              拖动滑块或滚轮缩放可同步查看原图与压缩图
+            </div>
+          </div>
+
+          <!-- Comparison Stats Row -->
+          <div class="card" style="padding:16px 20px;flex-shrink:0;">
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:0;" id="statsGrid">
+              <div style="text-align:center;padding:0 12px;">
+                <div style="font-size:10px;color:#78797b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">原大小</div>
+                <div style="font-size:18px;font-weight:700;color:#78797b;margin-top:4px;">2.4 MB</div>
+              </div>
+              <div style="text-align:center;padding:0 12px;border-left:1px solid #f0f0f0;">
+                <div style="font-size:10px;color:#78797b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">压缩后</div>
+                <div style="font-size:18px;font-weight:700;color:#0284c7;margin-top:4px;">772 KB</div>
+              </div>
+              <div style="text-align:center;padding:0 12px;border-left:1px solid #f0f0f0;">
+                <div style="font-size:10px;color:#78797b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">节省</div>
+                <div style="font-size:18px;font-weight:700;color:#16a34a;margin-top:4px;">-68%</div>
+              </div>
+              <div style="text-align:center;padding:0 12px;border-left:1px solid #f0f0f0;">
+                <div style="font-size:10px;color:#78797b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">尺寸</div>
+                <div style="font-size:14px;font-weight:600;color:#1c1c1e;margin-top:6px;">1920 × 1280</div>
+              </div>
+              <div style="text-align:center;padding:0 12px;border-left:1px solid #f0f0f0;">
+                <div style="font-size:10px;color:#78797b;font-weight:600;text-transform:uppercase;letter-spacing:0.06em;">质量</div>
+                <div style="font-size:14px;font-weight:600;color:#1c1c1e;margin-top:6px;">78%</div>
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /preview area -->
+
+        <!-- Bottom Progress Bar (shown when compressing) -->
+        <div id="batchProgress" style="display:none;padding:10px 20px;background:#fff;border-top:1px solid #eaeaec;flex-shrink:0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div class="spinner"></div>
+              <span style="font-size:12px;font-weight:600;color:#0284c7;">正在压缩…</span>
+            </div>
+            <span style="font-size:12px;color:#78797b;" id="progressLabel">3 / 4 张</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" id="batchFill" style="width:75%;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;">
+            <span style="font-size:10px;color:#b5b5b6;">预计剩余 8 秒</span>
+            <button class="btn btn-secondary" style="font-size:11px;padding:3px 10px;" onclick="cancelCompress()">取消</button>
+          </div>
+        </div>
+
+      </div><!-- /main area -->
+
+
+      <!-- ════════════════════════════════════════════
+           RIGHT CONTROL PANEL
+      ════════════════════════════════════════════ -->
+      <div style="width:300px;flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;border-left:1px solid #eaeaec;background:#fff;">
+
+        <!-- Panel Header -->
+        <div style="padding:16px 18px 12px;border-bottom:1px solid #f0f0f0;flex-shrink:0;">
+          <div style="font-size:13px;font-weight:700;color:#1c1c1e;">压缩设置</div>
+          <div style="font-size:11px;color:#78797b;margin-top:2px;">配置参数后点击开始压缩</div>
+        </div>
+
+        <!-- Scrollable Content -->
+        <div style="flex:1;overflow-y:auto;padding:16px 18px;">
+
+          <!-- 1. Quality Section -->
+          <div style="margin-bottom:20px;">
+            <div class="section-title">质量设置</div>
+            <div class="preset-row">
+              <button class="preset-btn" onclick="setQuality(30,this)">低</button>
+              <button class="preset-btn" onclick="setQuality(50,this)">中</button>
+              <button class="preset-btn active" onclick="setQuality(78,this)">高</button>
+              <button class="preset-btn" onclick="setQuality(95,this)">极高</button>
+            </div>
+            <div class="qslider-wrap">
+              <input type="range" class="qslider" id="qualitySlider" min="1" max="100" value="78"
+                oninput="updateQuality(this.value)" />
+              <div class="qslider-labels">
+                <span>小体积</span><span>高画质</span>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-top:8px;">
+              <span style="font-size:12px;color:#78797b;">当前质量</span>
+              <div style="display:flex;align-items:center;gap:6px;">
+                <span style="font-size:20px;font-weight:700;color:#0ea5e9;" id="qualityVal">78</span>
+                <span style="font-size:13px;color:#78797b;">%</span>
+              </div>
+            </div>
+            <!-- Estimated Size -->
+            <div style="margin-top:10px;padding:10px 12px;background:#f5f5f5;border-radius:8px;">
+              <div style="font-size:11px;color:#78797b;margin-bottom:6px;">预估压缩后大小</div>
+              <div style="display:flex;align-items:baseline;gap:4px;">
+                <span style="font-size:18px;font-weight:700;color:#0284c7;" id="estSize">772 KB</span>
+                <span style="font-size:11px;color:#b5b5b6;">（原 2.4 MB）</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- 2. Output Format Section -->
+          <div style="margin-bottom:20px;">
+            <div class="section-title">输出格式</div>
+            <div class="fmt-chips">
+              <button class="fmt-chip active" onclick="setFormat(this,'origin')">保持原格式</button>
+              <button class="fmt-chip" onclick="setFormat(this,'jpg')">JPG</button>
+              <button class="fmt-chip" onclick="setFormat(this,'png')">PNG</button>
+              <button class="fmt-chip" onclick="setFormat(this,'webp')">WebP</button>
+            </div>
+            <div style="margin-top:8px;font-size:11px;color:#b5b5b6;">
+              当前原图格式：<span style="color:#0284c7;font-weight:600;">JPEG</span>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- 3. Scale / Resize Section -->
+          <div style="margin-bottom:20px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <div class="section-title" style="margin-bottom:0;">尺寸调整</div>
+              <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                <input type="checkbox" id="scaleToggle" onchange="toggleScale(this.checked)" style="accent-color:#0ea5e9;" />
+                <span style="font-size:11px;color:#5c5d5e;">启用</span>
+              </label>
+            </div>
+            <div id="scaleOptions" style="display:none;">
+              <div style="margin-bottom:10px;">
+                <div style="font-size:11px;color:#78797b;margin-bottom:6px;">缩放比例</div>
+                <div class="preset-row">
+                  <button class="preset-btn" onclick="setScale(50,this)">50%</button>
+                  <button class="preset-btn active" onclick="setScale(75,this)">75%</button>
+                  <button class="preset-btn" onclick="setScale(100,this)">100%</button>
+                </div>
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <div>
+                  <div style="font-size:11px;color:#78797b;margin-bottom:4px;">最大宽度</div>
+                  <div style="display:flex;align-items:center;border:1.5px solid #eaeaec;border-radius:6px;overflow:hidden;">
+                    <input type="number" value="1920" style="flex:1;border:none;outline:none;padding:6px 8px;font-size:12px;background:#fafafa;width:0;" />
+                    <span style="padding:0 8px;font-size:11px;color:#78797b;background:#f5f5f5;border-left:1px solid #eaeaec;">px</span>
+                  </div>
+                </div>
+                <div>
+                  <div style="font-size:11px;color:#78797b;margin-bottom:4px;">最大高度</div>
+                  <div style="display:flex;align-items:center;border:1.5px solid #eaeaec;border-radius:6px;overflow:hidden;">
+                    <input type="number" value="1280" style="flex:1;border:none;outline:none;padding:6px 8px;font-size:12px;background:#fafafa;width:0;" />
+                    <span style="padding:0 8px;font-size:11px;color:#78797b;background:#f5f5f5;border-left:1px solid #eaeaec;">px</span>
+                  </div>
+                </div>
+              </div>
+              <div style="margin-top:6px;font-size:11px;color:#b5b5b6;">等比缩放，最大不超过设定值</div>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- 4. Current Image Info -->
+          <div style="margin-bottom:20px;">
+            <div class="section-title">当前图片信息</div>
+            <div>
+              <div class="info-row">
+                <span class="info-row__label">文件名</span>
+                <span class="info-row__value" style="max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">landscape.jpg</span>
+              </div>
+              <div class="info-row">
+                <span class="info-row__label">原始格式</span>
+                <span class="info-row__value">JPEG</span>
+              </div>
+              <div class="info-row">
+                <span class="info-row__label">尺寸</span>
+                <span class="info-row__value">1920 × 1280 px</span>
+              </div>
+              <div class="info-row">
+                <span class="info-row__label">原始大小</span>
+                <span class="info-row__value">2.4 MB</span>
+              </div>
+              <div class="info-row">
+                <span class="info-row__label">压缩后</span>
+                <span class="info-row__value highlight">772 KB</span>
+              </div>
+              <div class="info-row">
+                <span class="info-row__label">节省空间</span>
+                <span class="info-row__value saved">-68%</span>
+              </div>
+              <div class="info-row">
+                <span class="info-row__label">质量参数</span>
+                <span class="info-row__value">78%</span>
+              </div>
+              <div class="info-row">
+                <span class="info-row__label">输出格式</span>
+                <span class="info-row__value">JPEG（保持原格式）</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <!-- 5. Output Location -->
+          <div style="margin-bottom:20px;">
+            <div class="section-title">输出位置</div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <div style="flex:1;padding:8px 10px;background:#f5f5f5;border-radius:6px;font-size:11px;color:#78797b;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                📁 ~/Pictures/compressed/
+              </div>
+              <button class="btn btn-secondary" style="font-size:11px;padding:7px 12px;flex-shrink:0;" onclick="showToast('请选择目录','info')">
+                <i class="pi pi-folder-open" style="font-size:11px;"></i> 选择
+              </button>
+            </div>
+            <div style="margin-top:6px;font-size:10px;color:#b5b5b6;">
+              默认保存至原图所在目录的 <code style="background:#f0f0f0;padding:1px 4px;border-radius:3px;">_compressed</code> 子文件夹
+            </div>
+          </div>
+
+        </div><!-- /panel scrollable -->
+
+        <!-- Panel Footer: Action Buttons -->
+        <div style="padding:14px 18px;border-top:1px solid #f0f0f0;flex-shrink:0;display:flex;flex-direction:column;gap:8px;">
+          <!-- Primary Action -->
+          <button class="btn btn-primary" style="width:100%;" onclick="startCompress()">
+            <i class="pi pi-bolt"></i> 开始压缩
+          </button>
+          <!-- Secondary Actions -->
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary" style="flex:1;font-size:12px;" onclick="showToast('图片已保存至 ~/Pictures/compressed/','success')">
+              <i class="pi pi-download" style="font-size:11px;"></i> 保存
+            </button>
+            <button class="btn btn-secondary" style="flex:1;font-size:12px;" onclick="showToast('已复制路径','info')">
+              <i class="pi pi-copy" style="font-size:11px;"></i> 复制路径
+            </button>
+          </div>
+          <div style="font-size:10px;color:#b5b5b6;text-align:center;">
+            压缩过程完全本地执行，不上传任何数据
+          </div>
+        </div>
+
+      </div><!-- /right panel -->
+
+    </div><!-- /main content -->
+
+  </div><!-- /app shell -->
+
+
+  <!-- ════════════════════════════════════════════════════
+       DRAG OVERLAY (shown when files dragged into window)
+  ════════════════════════════════════════════════════ -->
+  <div class="drag-overlay" id="dragOverlay" style="display:none;">
+    <div class="drag-overlay__box">
+      <div class="drag-overlay__icon">📸</div>
+      <div class="drag-overlay__title">松开以添加图片</div>
+      <div class="drag-overlay__hint">支持 JPG、PNG、WebP、BMP、GIF，单个文件最大 100 MB</div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       HISTORY DRAWER (right slide-in panel)
+  ════════════════════════════════════════════════════ -->
+  <div id="historyDrawerOverlay" onclick="toggleHistoryDrawer()" style="
+    position:fixed;inset:0;background:rgba(0,0,0,0.2);z-index:998;
+    opacity:0;pointer-events:none;transition:opacity 0.3s;
+  "></div>
+
+  <div id="historyDrawer" style="
+    position:fixed;top:38px;right:0;width:380px;height:calc(100vh - 38px);
+    background:#fff;z-index:999;box-shadow:-4px 0 24px rgba(0,0,0,0.1);
+    display:flex;flex-direction:column;
+    transform:translateX(100%);transition:transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    border-left:1px solid #eaeaec;
+  ">
+
+    <!-- Drawer Header -->
+    <div style="padding:16px 18px;border-bottom:1px solid #eaeaec;display:flex;align-items:center;gap:10px;flex-shrink:0;">
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:700;color:#1c1c1e;">📜 压缩历史</div>
+        <div style="font-size:11px;color:#78797b;margin-top:2px;">最近 <strong style="color:#0ea5e9;" id="histCount">3</strong> 条记录</div>
+      </div>
+      <button class="btn btn-ghost" onclick="toggleHistoryDrawer()" style="padding:6px;">
+        <i class="pi pi-times" style="font-size:14px;"></i>
+      </button>
+    </div>
+
+    <!-- Drawer Toolbar -->
+    <div style="padding:12px 18px;border-bottom:1px solid #f0f0f0;flex-shrink:0;display:flex;flex-direction:column;gap:8px;">
+      <!-- Search -->
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1;display:flex;align-items:center;gap:6px;padding:6px 10px;background:#f5f5f5;border-radius:7px;border:1.5px solid transparent;transition:border-color 0.15s;" id="histSearchWrap" onfocus="this.style.borderColor='#0ea5e9'" onblur="this.style.borderColor='transparent'">
+          <i class="pi pi-search" style="font-size:12px;color:#78797b;"></i>
+          <input type="text" placeholder="搜索文件名…" style="flex:1;border:none;outline:none;background:transparent;font-size:12px;color:#1c1c1e;" id="histSearchInput" oninput="filterHistory()" />
+        </div>
+      </div>
+      <!-- Filter Tabs -->
+      <div style="display:flex;gap:4px;">
+        <button class="preset-btn active" onclick="setHistFilter(this,'today')" style="font-size:10px;padding:4px 8px;">今天</button>
+        <button class="preset-btn" onclick="setHistFilter(this,'week')" style="font-size:10px;padding:4px 8px;">近7天</button>
+        <button class="preset-btn" onclick="setHistFilter(this,'month')" style="font-size:10px;padding:4px 8px;">近30天</button>
+        <button class="preset-btn" onclick="setHistFilter(this,'all')" style="font-size:10px;padding:4px 8px;">全部</button>
+      </div>
+      <!-- Stats Summary -->
+      <div style="display:flex;gap:8px;">
+        <div style="flex:1;padding:7px 10px;background:#f0fdf4;border-radius:7px;text-align:center;">
+          <div style="font-size:10px;color:#15803d;font-weight:600;">总节省</div>
+          <div style="font-size:15px;font-weight:700;color:#16a34a;" id="histSavedTotal">4.2 GB</div>
+        </div>
+        <div style="flex:1;padding:7px 10px;background:#eff6ff;border-radius:7px;text-align:center;">
+          <div style="font-size:10px;color:#1d4ed8;font-weight:600;">平均压缩率</div>
+          <div style="font-size:15px;font-weight:700;color:#1d4ed8;" id="histAvgSaved">62%</div>
+        </div>
+        <div style="flex:1;padding:7px 10px;background:#faf5ff;border-radius:7px;text-align:center;">
+          <div style="font-size:10px;color:#7c3aed;font-weight:600;">总压缩数</div>
+          <div style="font-size:15px;font-weight:700;color:#7c3aed;" id="histTotalCount">3</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- History List -->
+    <div style="flex:1;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px;" id="historyList">
+
+      <!-- History Item 1 -->
+      <div class="card" style="padding:12px 14px;cursor:pointer;" onclick="openHistoryItem(this)" data-id="hist1">
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <img src="https://picsum.photos/id/10/60/60" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;" />
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:600;color:#1c1c1e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">landscape.jpg</div>
+            <div style="font-size:10px;color:#78797b;margin-top:2px;">今天 14:32 · 质量 78% · WebP</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+              <span style="font-size:11px;color:#78797b;text-decoration:line-through;">2.4 MB</span>
+              <i class="pi pi-arrow-right" style="font-size:9px;color:#0ea5e9;"></i>
+              <span style="font-size:11px;font-weight:600;color:#0284c7;">772 KB</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+            <span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;">-68%</span>
+            <div style="display:flex;gap:3px;" onclick="event.stopPropagation()">
+              <button class="btn-icon" onclick="recompressFromHistory('hist1')" data-tooltip="重新压缩"><i class="pi pi-refresh"></i></button>
+              <button class="btn-icon" onclick="applyParamsFromHistory('hist1')" data-tooltip="应用参数"><i class="pi pi-sliders-h"></i></button>
+              <button class="btn-icon" onclick="deleteHistoryItem('hist1')" data-tooltip="删除"><i class="pi pi-trash"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Item 2 -->
+      <div class="card" style="padding:12px 14px;cursor:pointer;" onclick="openHistoryItem(this)" data-id="hist2">
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <img src="https://picsum.photos/id/20/60/60" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;" />
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:600;color:#1c1c1e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">workspace.png</div>
+            <div style="font-size:10px;color:#78797b;margin-top:2px;">昨天 10:15 · 质量 60% · PNG</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+              <span style="font-size:11px;color:#78797b;text-decoration:line-through;">5.1 MB</span>
+              <i class="pi pi-arrow-right" style="font-size:9px;color:#0ea5e9;"></i>
+              <span style="font-size:11px;font-weight:600;color:#0284c7;">2.8 MB</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+            <span style="background:#fef3c7;color:#b45309;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;">-45%</span>
+            <div style="display:flex;gap:3px;" onclick="event.stopPropagation()">
+              <button class="btn-icon" onclick="recompressFromHistory('hist2')"><i class="pi pi-refresh"></i></button>
+              <button class="btn-icon" onclick="applyParamsFromHistory('hist2')"><i class="pi pi-sliders-h"></i></button>
+              <button class="btn-icon" onclick="deleteHistoryItem('hist2')"><i class="pi pi-trash"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- History Item 3 -->
+      <div class="card" style="padding:12px 14px;cursor:pointer;" onclick="openHistoryItem(this)" data-id="hist3">
+        <div style="display:flex;gap:10px;align-items:flex-start;">
+          <img src="https://picsum.photos/id/30/60/60" style="width:52px;height:52px;border-radius:8px;object-fit:cover;flex-shrink:0;" />
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;font-weight:600;color:#1c1c1e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">office_photo.webp</div>
+            <div style="font-size:10px;color:#78797b;margin-top:2px;">3 天前 · 质量 90% · JPG</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:6px;">
+              <span style="font-size:11px;color:#78797b;text-decoration:line-through;">8.7 MB</span>
+              <i class="pi pi-arrow-right" style="font-size:9px;color:#0ea5e9;"></i>
+              <span style="font-size:11px;font-weight:600;color:#0284c7;">3.5 MB</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0;">
+            <span style="background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;">-60%</span>
+            <div style="display:flex;gap:3px;" onclick="event.stopPropagation()">
+              <button class="btn-icon" onclick="recompressFromHistory('hist3')"><i class="pi pi-refresh"></i></button>
+              <button class="btn-icon" onclick="applyParamsFromHistory('hist3')"><i class="pi pi-sliders-h"></i></button>
+              <button class="btn-icon" onclick="deleteHistoryItem('hist3')"><i class="pi pi-trash"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Empty state (hidden by default) -->
+      <div id="historyEmpty" style="display:none;" class="empty-state">
+        <div class="empty-state__icon">📭</div>
+        <div class="empty-state__title">暂无历史记录</div>
+        <div class="empty-state__hint">压缩图片后会自动记录在这里</div>
+      </div>
+
+    </div><!-- /history list -->
+
+    <!-- Drawer Footer -->
+    <div style="padding:12px 18px;border-top:1px solid #eaeaec;flex-shrink:0;display:flex;gap:8px;">
+      <button class="btn btn-secondary" style="flex:1;font-size:12px;" onclick="showToast('历史已导出为 JSON','success')">
+        <i class="pi pi-upload" style="font-size:11px;"></i> 导出
+      </button>
+      <button class="btn btn-secondary" style="flex:1;font-size:12px;" onclick="showToast('请选择 JSON 文件导入','info')">
+        <i class="pi pi-download" style="font-size:11px;"></i> 导入
+      </button>
+      <button class="btn btn-danger" style="font-size:12px;" onclick="confirmClearHistory()">
+        <i class="pi pi-trash" style="font-size:11px;"></i>
+      </button>
+    </div>
+
+  </div><!-- /history drawer -->
+
+  <!-- ════════════════════════════════════════════════════
+       TOAST NOTIFICATION
+  ════════════════════════════════════════════════════ -->
+  <div id="toastContainer"></div>
+
+  <!-- ════════════════════════════════════════════════════
+       JAVASCRIPT INTERACTIONS
+  ════════════════════════════════════════════════════ -->
+  <script>
+    /* ── Toast ─────────────────────────────────────── */
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+      toast.className = `toast toast-${type}`;
+      toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${msg}</span>`;
+      container.appendChild(toast);
+      setTimeout(() => { toast.style.opacity = '0'; toast.style.transform = 'translateY(10px)'; toast.style.transition = 'all 0.3s'; setTimeout(() => toast.remove(), 300); }, 2800);
+    }
+
+    /* ── Image List Selection ───────────────────────── */
+    function selectItem(id) {
+      document.querySelectorAll('.img-item').forEach(el => el.classList.remove('selected'));
+      document.getElementById(id).classList.add('selected');
+      showToast('已选中图片', 'info');
+    }
+
+    /* ── Quality Slider ─────────────────────────────── */
+    function updateQuality(val) {
+      document.getElementById('qualityVal').textContent = val;
+      document.getElementById('qualitySlider').value = val;
+      // Simulate estimated size
+      const orig = 2.4;
+      const est = (orig * val / 100).toFixed(1);
+      document.getElementById('estSize').textContent = est + ' MB';
+      // Update preset buttons
+      document.querySelectorAll('.preset-row:first-of-type .preset-btn').forEach(b => b.classList.remove('active'));
+    }
+
+    function setQuality(val, btn) {
+      document.getElementById('qualitySlider').value = val;
+      document.getElementById('qualityVal').textContent = val;
+      const est = (2.4 * val / 100).toFixed(1);
+      document.getElementById('estSize').textContent = est + ' MB';
+      document.querySelectorAll('.preset-row:first-of-type .preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    /* ── Format Selector ────────────────────────────── */
+    function setFormat(btn, fmt) {
+      document.querySelectorAll('.fmt-chip').forEach(c => c.classList.remove('active'));
+      btn.classList.add('active');
+      const labels = { origin: '保持原格式', jpg: 'JPEG', png: 'PNG', webp: 'WebP' };
+      showToast('输出格式已设为：' + labels[fmt], 'info');
+    }
+
+    /* ── Scale Toggle ──────────────────────────────── */
+    function toggleScale(enabled) {
+      document.getElementById('scaleOptions').style.display = enabled ? 'block' : 'none';
+    }
+
+    function setScale(val, btn) {
+      document.querySelectorAll('#scaleOptions .preset-row .preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    }
+
+    /* ── Compress Action ────────────────────────────── */
+    function startCompress() {
+      const btn = event.target.closest('.btn-primary');
+      const origText = btn.innerHTML;
+      btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;"></div> 压缩中…';
+      btn.disabled = true;
+      showToast('开始压缩图片…', 'info');
+
+      // Simulate progress
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += Math.random() * 15 + 5;
+        if (progress >= 100) {
+          progress = 100;
+          clearInterval(interval);
+          btn.innerHTML = '<i class="pi pi-check"></i> 压缩完成';
+          btn.style.background = '#16a34a';
+          setTimeout(() => {
+            btn.innerHTML = origText;
+            btn.style.background = '';
+            btn.disabled = false;
+          }, 2500);
+          showToast('压缩完成！节省了 68%', 'success');
+        } else {
+          btn.innerHTML = '<div class="spinner" style="width:14px;height:14px;border-width:2px;"></div> ' + Math.round(progress) + '%';
+        }
+      }, 200);
+    }
+
+    function cancelCompress() {
+      document.getElementById('batchProgress').style.display = 'none';
+      showToast('已取消压缩', 'info');
+    }
+
+    /* ── View Mode Tabs ─────────────────────────────── */
+    function setViewMode(btn, mode) {
+      document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+      const comparePanel = document.getElementById('compareSideBySide');
+      if (mode === 'original') {
+        comparePanel.style.display = 'none';
+      } else if (mode === 'compressed') {
+        comparePanel.style.display = 'none';
+      } else {
+        comparePanel.style.display = 'flex';
+      }
+      showToast('切换至：' + {compare:'对比视图', original:'原图', compressed:'压缩图'}[mode], 'info');
+    }
+
+    /* ── Zoom ───────────────────────────────────────── */
+    let zoomLevel = 1.0;
+    function zoom(delta) {
+      zoomLevel = Math.max(0.25, Math.min(4, zoomLevel + delta));
+      document.getElementById('zoomVal').textContent = Math.round(zoomLevel * 100) + '%';
+      document.querySelectorAll('#origWrap img, #sliderWrap img').forEach(img => {
+        img.style.transform = `scale(${zoomLevel})`;
+      });
+    }
+    function zoomReset() {
+      zoomLevel = 1.0;
+      document.getElementById('zoomVal').textContent = '100%';
+      document.querySelectorAll('#origWrap img, #sliderWrap img').forEach(img => {
+        img.style.transform = 'scale(1)';
+      });
+    }
+
+    /* ── Slider Compare Drag ─────────────────────────── */
+    let isDragging = false;
+    function startDrag(e) {
+      isDragging = true;
+      document.addEventListener('mousemove', onDrag);
+      document.addEventListener('mouseup', stopDrag);
+      e.preventDefault();
+    }
+    function onDrag(e) {
+      if (!isDragging) return;
+      const wrap = document.getElementById('sliderWrap');
+      const rect = wrap.getBoundingClientRect();
+      const pct = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+      document.getElementById('sliderDivider').style.left = pct + '%';
+      document.getElementById('sliderClipLeft').style.width = pct + '%';
+    }
+    function stopDrag() {
+      isDragging = false;
+      document.removeEventListener('mousemove', onDrag);
+      document.removeEventListener('mouseup', stopDrag);
+    }
+
+    /* ── Drag & Drop File Upload ────────────────────── */
+    const dragOverlay = document.getElementById('dragOverlay');
+    let dragCounter = 0;
+
+    document.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      dragCounter++;
+      if (e.dataTransfer.types.includes('Files')) {
+        dragOverlay.style.display = 'flex';
+      }
+    });
+    document.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dragCounter--;
+      if (dragCounter === 0) dragOverlay.style.display = 'none';
+    });
+    document.addEventListener('dragover', (e) => { e.preventDefault(); });
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dragCounter = 0;
+      dragOverlay.style.display = 'none';
+      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
+      if (files.length === 0) {
+        showToast('不支持的文件类型，请上传图片文件', 'error');
+      } else {
+        showToast(`已添加 ${files.length} 张图片`, 'success');
+      }
+    });
+
+    /* ── File Input ─────────────────────────────────── */
+    document.getElementById('fileInput').addEventListener('change', function() {
+      const files = Array.from(this.files);
+      if (files.length > 0) {
+        showToast(`已选择 ${files.length} 个文件`, 'success');
+      }
+      this.value = '';
+    });
+
+    /* ── Window Title Bar Controls ───────────────────── */
+    // These would call Electron window controls in the real app
+    document.querySelector('.btn-close').addEventListener('click', () => {
+      showToast('关闭应用（Electron 窗口控制）', 'info');
+    });
+
+    /* ── History Drawer ─────────────────────────────── */
+    let historyOpen = false;
+    function toggleHistoryDrawer() {
+      historyOpen = !historyOpen;
+      const drawer = document.getElementById('historyDrawer');
+      const overlay = document.getElementById('historyDrawerOverlay');
+      if (historyOpen) {
+        drawer.style.transform = 'translateX(0)';
+        overlay.style.opacity = '1';
+        overlay.style.pointerEvents = 'auto';
+      } else {
+        drawer.style.transform = 'translateX(100%)';
+        overlay.style.opacity = '0';
+        overlay.style.pointerEvents = 'none';
+      }
+    }
+
+    function setHistFilter(btn, filter) {
+      document.querySelectorAll('#historyDrawer .preset-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      showToast('筛选：' + {today:'今天',week:'近7天',month:'近30天',all:'全部'}[filter], 'info');
+    }
+
+    function filterHistory() {
+      const keyword = document.getElementById('histSearchInput').value.toLowerCase();
+      document.querySelectorAll('#historyList .card').forEach(card => {
+        const name = card.querySelector('div').textContent.toLowerCase();
+        card.style.display = name.includes(keyword) ? '' : 'none';
+      });
+    }
+
+    function openHistoryItem(card) {
+      document.querySelectorAll('#historyList .card').forEach(c => c.style.outline = 'none');
+      card.style.outline = '2px solid #0ea5e9';
+      showToast('打开历史压缩结果（文件预览）', 'info');
+    }
+
+    function recompressFromHistory(id) {
+      showToast('正在重新压缩…', 'info');
+      setTimeout(() => showToast('重新压缩完成！', 'success'), 1500);
+    }
+
+    function applyParamsFromHistory(id) {
+      showToast('已应用历史参数（质量 78% → 质量滑块）', 'info');
+      if (document.getElementById('historyDrawerOverlay')) {
+        // In real app: set compressOptions from history record
+      }
+    }
+
+    function deleteHistoryItem(id) {
+      const items = document.querySelectorAll('#historyList .card');
+      if (items.length <= 1) {
+        document.getElementById('historyEmpty').style.display = '';
+      }
+      event.target.closest('.card').style.display = 'none';
+      showToast('历史记录已删除', 'info');
+    }
+
+    function confirmClearHistory() {
+      const confirmed = confirm('确定要清空全部历史记录吗？此操作不可撤销。');
+      if (confirmed) {
+        document.querySelectorAll('#historyList .card').forEach(c => c.style.display = 'none');
+        document.getElementById('historyEmpty').style.display = '';
+        showToast('历史记录已全部清空', 'info');
+      }
+    }
+
+    /* ── Init ────────────────────────────────────────── */
+    window.addEventListener('DOMContentLoaded', () => {
+      // Show welcome toast
+      setTimeout(() => showToast('欢迎使用图片压缩工具 👋', 'success'), 500);
+    });
+  </script>
+
+</body>
+</html>
