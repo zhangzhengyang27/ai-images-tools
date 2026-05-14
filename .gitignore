@@ -48,3 +48,16 @@ htmlcov/
 *.tmp
 *.temp
 .cache/
+
+# Node.js / Electron
+node_modules/
+out/
+release/
+.electron/
+
+# Build outputs
+*.js.map
+*.d.ts
+
+# Electron specific
+!build/entitlements.mac.plist

@@ -1,0 +1,40 @@
+{
+  "name": "ai-images-tools",
+  "version": "1.0.0",
+  "description": "图片压缩工具 - 本地图片压缩桌面应用",
+  "main": "./out/main/index.cjs",
+  "type": "module",
+  "author": "ai-images-tools",
+  "license": "MIT",
+  "homepage": "https://github.com/ai-images-tools",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "postinstall": "electron-builder install-app-deps",
+    "build:unpack": "pnpm run build && electron-builder --dir",
+    "build:win": "pnpm run build && electron-builder --win",
+    "build:mac": "pnpm run build && electron-builder --mac",
+    "build:all": "pnpm run build && electron-builder --win --mac"
+  },
+  "dependencies": {
+    "@electron-toolkit/utils": "^3.0.0",
+    "electron-updater": "^6.3.9",
+    "fs-extra": "^11.3.0",
+    "pinia": "^2.3.0",
+    "primeicons": "^7.0.0",
+    "primevue": "^4.3.2",
+    "sharp": "^0.33.5",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@primevue/themes": "^4.3.2",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.13.4",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "electron": "^34.0.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "vite": "^5.4.0",
+    "@tailwindcss/vite": "^4.1.0"
+  }
+}

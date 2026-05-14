@@ -1,0 +1,50 @@
+appId: com.ai-images-tools.app
+productName: 图片压缩工具
+directories:
+  buildResources: build
+  output: out
+files:
+  - '!**/.git'
+  - '!**/.DS_Store'
+  - '!**/node_modules/*'
+  - '!**/{.gitignore,.eslintrc,.eslintignore}'
+  - '!**/{tsconfig,tsconfig.node}.json'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.prettier,.prettierignore}'
+  - '!*.md'
+  - '!docs/*'
+extraResources:
+  - from: 'resources'
+    to: 'resources'
+    filter:
+      - '!**/.git'
+      - '!**/.DS_Store'
+mac:
+  entitlementsInherit: 'build/entitlements.mac.plist'
+  category: public.app-category.graphics-design
+  icon: build/icon.icns
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+    - target: zip
+      arch:
+        - x64
+        - arm64
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - ia32
+    - target: portable
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
