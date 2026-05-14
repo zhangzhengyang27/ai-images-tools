@@ -51,6 +51,8 @@ export async function compressImage(
   options: {
     quality: number
     outputFormat: 'origin' | 'jpg' | 'png' | 'webp'
+    scaleEnabled?: boolean
+    scalePercent?: number
     maxWidth?: number
     maxHeight?: number
   },
@@ -99,7 +101,16 @@ export async function compressImage(
     pipeline = sharp(inputPath, { pages: 1 })
   }
 
-  // 尺寸调整
+  // 尺寸调整（按比例缩放）
+  if (options.scaleEnabled && options.scalePercent !== undefined && options.scalePercent < 100) {
+    // 先按比例缩放
+    const targetWidth = Math.round((metadata.width || 0) * (options.scalePercent / 100))
+    const targetHeight = Math.round((metadata.height || 0) * (options.scalePercent / 100))
+    pipeline = pipeline.resize(targetWidth, targetHeight)
+    onProgress?.(30)
+  }
+
+  // 尺寸调整（最大宽高限制）
   if (options.maxWidth || options.maxHeight) {
     pipeline = pipeline.resize(options.maxWidth, options.maxHeight, {
       fit: 'inside',

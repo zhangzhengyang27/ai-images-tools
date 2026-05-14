@@ -7,12 +7,13 @@ interface Toast {
   type: 'success' | 'error' | 'info'
 }
 
-const toasts = ref<Toast[]>([])
-let toastId = 0
+// Module-level singleton — shared across all ToastContainer instances
+const globalToasts = ref<Toast[]>([])
+let globalToastId = 0
 
 const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
-  const id = ++toastId
-  toasts.value.push({ id, message, type })
+  const id = ++globalToastId
+  globalToasts.value.push({ id, message, type })
 
   setTimeout(() => {
     removeToast(id)
@@ -20,13 +21,13 @@ const addToast = (message: string, type: 'success' | 'error' | 'info' = 'info') 
 }
 
 const removeToast = (id: number) => {
-  const index = toasts.value.findIndex((t) => t.id === id)
+  const index = globalToasts.value.findIndex((t) => t.id === id)
   if (index !== -1) {
-    toasts.value.splice(index, 1)
+    globalToasts.value.splice(index, 1)
   }
 }
 
-// 暴露给全局使用
+// 暴露给全局使用（使用 Symbol 避免键名冲突）
 onMounted(() => {
   ;(window as any).__showToast = addToast
 })
@@ -41,7 +42,7 @@ onUnmounted(() => {
     <div id="toast-container">
       <TransitionGroup name="toast">
         <div
-          v-for="toast in toasts"
+          v-for="toast in globalToasts"
           :key="toast.id"
           class="toast"
           :class="`toast-${toast.type}`"

@@ -1,10 +1,61 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron/main'
+import { ipcMain, dialog, BrowserWindow, shell } from 'electron/main'
 import * as fs from 'fs/promises'
 import * as path from 'path'
 import { compressImage, getImageMetadata, cleanupTempFiles } from '../services/imageCompress'
+import {
+  loadHistory,
+  addHistoryRecord,
+  deleteHistoryRecord,
+  clearHistory,
+  exportHistory,
+  importHistory,
+  type HistoryRecord
+} from '../services/historyService'
 
 // 取消标志
 let cancelRequested = false
+
+const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'])
+
+async function collectImagePaths(inputPaths: string[]): Promise<string[]> {
+  const result: string[] = []
+
+  async function visit(filePath: string): Promise<void> {
+    try {
+      const stats = await fs.stat(filePath)
+      if (stats.isDirectory()) {
+        const entries = await fs.readdir(filePath)
+        await Promise.all(entries.map((entry) => visit(path.join(filePath, entry))))
+        return
+      }
+
+      if (stats.isFile() && IMAGE_EXTENSIONS.has(path.extname(filePath).toLowerCase())) {
+        result.push(filePath)
+      }
+    } catch {
+      // 忽略无法访问的拖拽路径或目录项
+    }
+  }
+
+  await Promise.all(inputPaths.map((filePath) => visit(filePath)))
+  return Array.from(new Set(result)).sort((a, b) => a.localeCompare(b))
+}
+
+async function getAvailablePath(targetPath: string): Promise<string> {
+  const parsed = path.parse(targetPath)
+  let candidate = targetPath
+  let index = 1
+
+  while (true) {
+    try {
+      await fs.access(candidate)
+      candidate = path.join(parsed.dir, `${parsed.name}_${index}${parsed.ext}`)
+      index += 1
+    } catch {
+      return candidate
+    }
+  }
+}
 
 export function registerIpcHandlers(): void {
   // 窗口控制
@@ -39,6 +90,23 @@ export function registerIpcHandlers(): void {
       ]
     })
     return result.filePaths
+  })
+
+  // 选择图片文件夹
+  ipcMain.handle('file:open-image-folder-dialog', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      title: '选择图片文件夹'
+    })
+    if (result.canceled || result.filePaths.length === 0) {
+      return []
+    }
+    return collectImagePaths(result.filePaths)
+  })
+
+  // 解析拖拽路径，目录会展开为图片文件
+  ipcMain.handle('file:resolve-image-paths', async (_event, paths: string[]) => {
+    return collectImagePaths(paths)
   })
 
   // 保存文件对话框
@@ -84,14 +152,44 @@ export function registerIpcHandlers(): void {
   })
 
   // 保存文件到指定路径
-  ipcMain.handle('file:save-to-path', async (_event, sourcePath: string, targetPath: string) => {
+  ipcMain.handle(
+    'file:save-to-path',
+    async (_event, sourcePath: string, targetPath: string, options?: { avoidConflict?: boolean }) => {
     try {
-      await fs.copyFile(sourcePath, targetPath)
-      return { success: true, path: targetPath }
+      const finalPath = options?.avoidConflict ? await getAvailablePath(targetPath) : targetPath
+      await fs.copyFile(sourcePath, finalPath)
+      return { success: true, path: finalPath }
     } catch (error) {
       return {
         success: false,
         error: error instanceof Error ? error.message : '保存文件失败'
+      }
+    }
+    }
+  )
+
+  // 判断文件是否存在
+  ipcMain.handle('file:exists', async (_event, filePath: string) => {
+    try {
+      await fs.access(filePath)
+      return { success: true, exists: true }
+    } catch {
+      return { success: true, exists: false }
+    }
+  })
+
+  // 使用系统默认应用打开文件或在 Finder/Explorer 中定位
+  ipcMain.handle('file:open-path', async (_event, filePath: string) => {
+    try {
+      const error = await shell.openPath(filePath)
+      if (error) {
+        return { success: false, error }
+      }
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '打开文件失败'
       }
     }
   })
@@ -101,11 +199,13 @@ export function registerIpcHandlers(): void {
     'compress:start',
     async (
       event,
-      options: {
+        options: {
         id: string
         filePath: string
         quality: number
         outputFormat: 'origin' | 'jpg' | 'png' | 'webp'
+        scaleEnabled?: boolean
+        scalePercent?: number
         maxWidth?: number
         maxHeight?: number
       }
@@ -123,6 +223,8 @@ export function registerIpcHandlers(): void {
           {
             quality: options.quality,
             outputFormat: options.outputFormat,
+            scaleEnabled: options.scaleEnabled,
+            scalePercent: options.scalePercent,
             maxWidth: options.maxWidth,
             maxHeight: options.maxHeight
           },
@@ -138,7 +240,9 @@ export function registerIpcHandlers(): void {
         }
 
         // 计算节省比例
-        const savedPercent = Math.round(((originalSize - result.size) / originalSize) * 100)
+        const savedPercent = originalSize > 0
+          ? Math.round(((originalSize - result.size) / originalSize) * 100)
+          : 0
 
         // 发送结果
         event.sender.send('compress:result', {
@@ -170,10 +274,21 @@ export function registerIpcHandlers(): void {
     'compress:batch',
     async (
       event,
-      options: {
-        images: Array<{ id: string; filePath: string }>
+        options: {
+        images: Array<{
+          id: string
+          filePath: string
+          quality?: number
+          outputFormat?: 'origin' | 'jpg' | 'png' | 'webp'
+          scaleEnabled?: boolean
+          scalePercent?: number
+          maxWidth?: number
+          maxHeight?: number
+        }>
         quality: number
         outputFormat: 'origin' | 'jpg' | 'png' | 'webp'
+        scaleEnabled?: boolean
+        scalePercent?: number
         maxWidth?: number
         maxHeight?: number
       }
@@ -187,6 +302,14 @@ export function registerIpcHandlers(): void {
         }
 
         const image = options.images[i]
+        const compressOptions = {
+          quality: image.quality ?? options.quality,
+          outputFormat: image.outputFormat ?? options.outputFormat,
+          scaleEnabled: image.scaleEnabled ?? options.scaleEnabled,
+          scalePercent: image.scalePercent ?? options.scalePercent,
+          maxWidth: image.maxWidth ?? options.maxWidth,
+          maxHeight: image.maxHeight ?? options.maxHeight
+        }
 
         try {
           // 获取原始文件大小
@@ -196,12 +319,7 @@ export function registerIpcHandlers(): void {
           // 执行压缩
           const result = await compressImage(
             image.filePath,
-            {
-              quality: options.quality,
-              outputFormat: options.outputFormat,
-              maxWidth: options.maxWidth,
-              maxHeight: options.maxHeight
-            },
+            compressOptions,
             (progress) => {
               if (!cancelRequested) {
                 const totalProgress = Math.round(((i + progress / 100) / options.images.length) * 100)
@@ -216,7 +334,9 @@ export function registerIpcHandlers(): void {
           }
 
           // 计算节省比例
-          const savedPercent = Math.round(((originalSize - result.size) / originalSize) * 100)
+          const savedPercent = originalSize > 0
+            ? Math.round(((originalSize - result.size) / originalSize) * 100)
+            : 0
 
           // 发送单张结果
           event.sender.send('compress:result', {
@@ -251,6 +371,103 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('compress:cancel', () => {
     cancelRequested = true
     return { success: true }
+  })
+
+  // ─── 历史记录 IPC ───
+
+  // 加载历史记录
+  ipcMain.handle('history:load', async () => {
+    try {
+      const records = await loadHistory()
+      return { success: true, records }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '加载历史失败',
+        records: []
+      }
+    }
+  })
+
+  // 添加历史记录
+  ipcMain.handle('history:add', async (_event, record: HistoryRecord) => {
+    try {
+      await addHistoryRecord(record)
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '添加历史失败'
+      }
+    }
+  })
+
+  // 删除单条历史记录
+  ipcMain.handle('history:delete', async (_event, id: string) => {
+    try {
+      await deleteHistoryRecord(id)
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '删除历史失败'
+      }
+    }
+  })
+
+  // 清空全部历史记录
+  ipcMain.handle('history:clear', async () => {
+    try {
+      await clearHistory()
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '清空历史失败'
+      }
+    }
+  })
+
+  // 导出历史记录
+  ipcMain.handle('history:export', async () => {
+    try {
+      const result = await dialog.showSaveDialog({
+        title: '导出历史记录',
+        defaultPath: `compress-history-${Date.now()}.json`,
+        filters: [{ name: 'JSON', extensions: ['json'] }]
+      })
+      if (result.canceled || !result.filePath) {
+        return { success: false, error: '已取消' }
+      }
+      await exportHistory(result.filePath)
+      return { success: true, exportedPath: result.filePath }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '导出失败'
+      }
+    }
+  })
+
+  // 导入历史记录
+  ipcMain.handle('history:import', async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        title: '导入历史记录',
+        properties: ['openFile'],
+        filters: [{ name: 'JSON', extensions: ['json'] }]
+      })
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, error: '已取消' }
+      }
+      const { count } = await importHistory(result.filePaths[0])
+      return { success: true, count }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '导入失败'
+      }
+    }
   })
 }
 

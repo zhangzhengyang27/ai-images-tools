@@ -12,10 +12,17 @@ const formats: Array<{ label: string; value: OutputFormat }> = [
   { label: 'WebP', value: 'webp' }
 ]
 
-const currentFormat = computed(() => imageStore.compressOptions.outputFormat)
+const usePerImageOptions = computed(() => !!imageStore.selectedImage?.compressOptions)
+const currentFormat = computed(
+  () => imageStore.selectedImage?.compressOptions?.outputFormat || imageStore.compressOptions.outputFormat
+)
 
 const setFormat = (format: OutputFormat) => {
-  imageStore.setOutputFormat(format)
+  if (usePerImageOptions.value) {
+    imageStore.updateSelectedImageCompressOptions({ outputFormat: format })
+  } else {
+    imageStore.setOutputFormat(format)
+  }
 }
 
 const originalFormatText = computed(() => {

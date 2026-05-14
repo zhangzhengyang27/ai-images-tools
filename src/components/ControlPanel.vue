@@ -2,6 +2,7 @@
 import { useImageStore } from '@/stores/imageStore'
 import QualitySlider from './QualitySlider.vue'
 import FormatSelector from './FormatSelector.vue'
+import ScaleAdjuster from './ScaleAdjuster.vue'
 import ImageInfo from './ImageInfo.vue'
 import ActionButtons from './ActionButtons.vue'
 
@@ -27,6 +28,11 @@ const imageStore = useImageStore()
 
       <!-- Output Format Section -->
       <FormatSelector />
+
+      <div class="sep"></div>
+
+      <!-- Scale Adjuster Section -->
+      <ScaleAdjuster />
 
       <div class="sep"></div>
 

@@ -162,6 +162,25 @@ img {
   font-size: 12px;
 }
 
+.upload-zone__folder-btn {
+  margin-top: 10px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid #bae6fd;
+  background: #fff;
+  color: #0284c7;
+  font-size: 12px;
+  font-weight: 600;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.upload-zone__folder-btn:hover {
+  border-color: #0ea5e9;
+  background: #f0f9ff;
+}
+
 /* Image List Item */
 .img-item {
   display: flex;

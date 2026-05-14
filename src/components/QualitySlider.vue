@@ -4,7 +4,9 @@ import { useImageStore } from '@/stores/imageStore'
 
 const imageStore = useImageStore()
 
-const quality = computed(() => imageStore.compressOptions.quality)
+const usePerImageOptions = computed(() => !!imageStore.selectedImage?.compressOptions)
+const activeOptions = computed(() => imageStore.selectedImage?.compressOptions || imageStore.compressOptions)
+const quality = computed(() => activeOptions.value.quality)
 
 const presets = [
   { label: '低', value: 30 },
@@ -14,7 +16,11 @@ const presets = [
 ]
 
 const setQuality = (value: number) => {
-  imageStore.setQuality(value)
+  if (usePerImageOptions.value) {
+    imageStore.updateSelectedImageCompressOptions({ quality: Math.max(1, Math.min(100, value)) })
+  } else {
+    imageStore.setQuality(value)
+  }
 }
 
 const onSliderChange = (e: Event) => {
@@ -45,6 +51,22 @@ const originalSizeText = computed(() => {
 <template>
   <div class="mb-5">
     <div class="section-title">质量设置</div>
+
+    <div v-if="imageStore.selectedImage" class="mb-3 flex items-center justify-between gap-2">
+      <span class="text-[11px] text-surface-600">
+        {{ usePerImageOptions ? '当前图片独立参数' : '使用全局参数' }}
+      </span>
+      <button
+        class="text-[11px] text-primary-600 hover:text-primary-700 font-semibold"
+        @click="
+          usePerImageOptions
+            ? imageStore.clearSelectedImageCompressOptions()
+            : imageStore.updateSelectedImageCompressOptions({})
+        "
+      >
+        {{ usePerImageOptions ? '改用全局' : '单独设置' }}
+      </button>
+    </div>
 
     <!-- Preset Buttons -->
     <div class="flex gap-1.5 mb-3">

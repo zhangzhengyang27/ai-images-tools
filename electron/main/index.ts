@@ -1,6 +1,5 @@
 // Electron 主进程入口
-// 使用特殊方式导入 electron 模块以避免 pnpm 的模块解析问题
-import { app, BrowserWindow, shell, ipcMain, dialog } from 'electron/main'
+import { app, BrowserWindow, shell } from 'electron/main'
 import { join } from 'path'
 import { registerIpcHandlers, cleanup } from './ipc/handlers'
 
@@ -16,7 +15,7 @@ function createWindow(): void {
     trafficLightPosition: { x: 15, y: 10 },
     ...(process.platform === 'linux' ? { icon: join(__dirname, '../../build/icon.png') } : {}),
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      preload: join(__dirname, '../preload/index.cjs'),
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false
@@ -53,8 +52,12 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
+  cleanup()
   if (process.platform !== 'darwin') {
-    cleanup()
     app.quit()
   }
+})
+
+app.on('before-quit', () => {
+  cleanup()
 })
