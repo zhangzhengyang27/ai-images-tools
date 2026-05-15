@@ -2,7 +2,7 @@ appId: com.ai-images-tools.app
 productName: 图片压缩工具
 directories:
   buildResources: build
-  output: out
+  output: dist
 files:
   - '!**/.git'
   - '!**/.DS_Store'
@@ -14,12 +14,13 @@ files:
   - '!{.prettier,.prettierignore}'
   - '!*.md'
   - '!docs/*'
-extraResources:
-  - from: 'resources'
-    to: 'resources'
-    filter:
-      - '!**/.git'
-      - '!**/.DS_Store'
+  - '!test.js'
+  - '!vitest.config.*'
+  - '!out/mac-arm64'
+asar: true
+asarUnpack:
+  - '**/*.node'
+  - '**/vendor/**'
 mac:
   entitlementsInherit: 'build/entitlements.mac.plist'
   category: public.app-category.graphics-design
@@ -27,11 +28,9 @@ mac:
   target:
     - target: dmg
       arch:
-        - x64
         - arm64
     - target: zip
       arch:
-        - x64
         - arm64
 win:
   icon: build/icon.ico
