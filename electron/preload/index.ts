@@ -132,7 +132,37 @@ const electronAPI = {
   deleteHistory: (id: string) => ipcRenderer.invoke('history:delete', id),
   clearHistory: () => ipcRenderer.invoke('history:clear'),
   exportHistory: () => ipcRenderer.invoke('history:export'),
-  importHistory: () => ipcRenderer.invoke('history:import')
+  importHistory: () => ipcRenderer.invoke('history:import'),
+
+  // 自动更新
+  checkForUpdates: () => ipcRenderer.invoke('updater:check'),
+  downloadUpdate: () => ipcRenderer.invoke('updater:download'),
+  installUpdate: () => ipcRenderer.invoke('updater:install'),
+  onUpdateAvailable: (callback: (info: { version: string; releaseNotes?: string; releaseName?: string }) => void) => {
+    const handler = (_: unknown, info: { version: string; releaseNotes?: string; releaseName?: string }) => callback(info)
+    ipcRenderer.on('updater:available', handler)
+    return () => ipcRenderer.removeListener('updater:available', handler)
+  },
+  onUpdateNotAvailable: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('updater:not-available', handler)
+    return () => ipcRenderer.removeListener('updater:not-available', handler)
+  },
+  onUpdateProgress: (callback: (data: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void) => {
+    const handler = (_: unknown, data: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => callback(data)
+    ipcRenderer.on('updater:progress', handler)
+    return () => ipcRenderer.removeListener('updater:progress', handler)
+  },
+  onUpdateDownloaded: (callback: () => void) => {
+    const handler = () => callback()
+    ipcRenderer.on('updater:downloaded', handler)
+    return () => ipcRenderer.removeListener('updater:downloaded', handler)
+  },
+  onUpdateError: (callback: (data: { message: string }) => void) => {
+    const handler = (_: unknown, data: { message: string }) => callback(data)
+    ipcRenderer.on('updater:error', handler)
+    return () => ipcRenderer.removeListener('updater:error', handler)
+  }
 }
 
 contextBridge.exposeInMainWorld('electronAPI', electronAPI)

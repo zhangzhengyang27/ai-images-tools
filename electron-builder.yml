@@ -47,3 +47,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true
   createStartMenuShortcut: true
+publish:
+  provider: github
+  owner: zhangzhengyang27
+  repo: ai-images-tools

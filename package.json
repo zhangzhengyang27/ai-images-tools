@@ -6,6 +6,10 @@
   "type": "module",
   "author": "ai-images-tools",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhangzhengyang27/ai-images-tools.git"
+  },
   "homepage": "https://github.com/ai-images-tools",
   "scripts": {
     "dev": "electron-vite dev",

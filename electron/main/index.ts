@@ -2,6 +2,7 @@
 import { app, BrowserWindow, net, protocol, shell } from 'electron/main'
 import { pathToFileURL } from 'url'
 import { join } from 'path'
+import { autoUpdater } from 'electron-updater'
 import { registerIpcHandlers, cleanup } from './ipc/handlers'
 
 protocol.registerSchemesAsPrivileged([
@@ -64,6 +65,10 @@ app.whenReady().then(() => {
 
   // 注册 IPC 处理器
   registerIpcHandlers()
+
+  // 配置自动更新
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = true
 
   createWindow()
 

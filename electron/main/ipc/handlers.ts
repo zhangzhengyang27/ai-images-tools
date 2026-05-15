@@ -2,6 +2,7 @@ import { ipcMain, dialog, BrowserWindow, shell } from 'electron/main'
 import type { WebContents } from 'electron/main'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { autoUpdater } from 'electron-updater'
 import { compressImage, getImageMetadata, cleanupTempFiles, cancelCompression } from '../services/imageCompress'
 import {
   loadHistory,
@@ -419,6 +420,100 @@ export function registerIpcHandlers(): void {
     cancelRequested = true
     cancelCompression(activeCompressTaskId || undefined)
     return { success: true }
+  })
+
+  // ─── 自动更新 IPC ───
+
+  // 检查更新
+  ipcMain.handle('updater:check', async () => {
+    try {
+      const result = await autoUpdater.checkForUpdates()
+      return {
+        success: true,
+        updateInfo: result?.updateInfo
+          ? {
+              version: result.updateInfo.version,
+              releaseNotes: result.updateInfo.releaseNotes,
+              releaseName: result.updateInfo.releaseName
+            }
+          : null
+      }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '检查更新失败'
+      }
+    }
+  })
+
+  // 下载更新
+  ipcMain.handle('updater:download', async () => {
+    try {
+      await autoUpdater.downloadUpdate()
+      return { success: true }
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : '下载更新失败'
+      }
+    }
+  })
+
+  // 安装更新并退出
+  ipcMain.handle('updater:install', () => {
+    autoUpdater.quitAndInstall()
+    return { success: true }
+  })
+
+  // 更新可用
+  autoUpdater.on('update-available', (info) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      win.webContents.send('updater:available', {
+        version: info.version,
+        releaseNotes: info.releaseNotes,
+        releaseName: info.releaseName
+      })
+    }
+  })
+
+  // 更新不可用
+  autoUpdater.on('update-not-available', () => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      win.webContents.send('updater:not-available')
+    }
+  })
+
+  // 下载进度
+  autoUpdater.on('download-progress', (progress) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      win.webContents.send('updater:progress', {
+        percent: progress.percent,
+        bytesPerSecond: progress.bytesPerSecond,
+        transferred: progress.transferred,
+        total: progress.total
+      })
+    }
+  })
+
+  // 更新已下载
+  autoUpdater.on('update-downloaded', () => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      win.webContents.send('updater:downloaded')
+    }
+  })
+
+  // 更新错误
+  autoUpdater.on('error', (error) => {
+    const win = BrowserWindow.getAllWindows()[0]
+    if (win) {
+      win.webContents.send('updater:error', {
+        message: error?.message || '更新出错'
+      })
+    }
   })
 
   // ─── 历史记录 IPC ───
