@@ -32,6 +32,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
   release-win:
+    needs: release-mac
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
