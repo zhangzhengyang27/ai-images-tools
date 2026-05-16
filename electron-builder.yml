@@ -22,7 +22,6 @@ asarUnpack:
   - '**/*.node'
   - '**/vendor/**'
 mac:
-  entitlementsInherit: 'build/entitlements.mac.plist'
   category: public.app-category.graphics-design
   icon: build/icon.icns
   target:
