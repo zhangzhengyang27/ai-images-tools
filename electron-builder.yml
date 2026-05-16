@@ -1,5 +1,5 @@
 appId: com.ai-images-tools.app
-productName: 图片压缩工具
+productName: ai-images-tools
 directories:
   buildResources: build
   output: dist
