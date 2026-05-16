@@ -22,7 +22,7 @@ jobs:
         with:
           node-version: 20
 
-      - run: pnpm install
+      - run: pnpm install --ignore-scripts=false
 
       - run: pnpm run build
 
@@ -45,7 +45,7 @@ jobs:
         with:
           node-version: 20
 
-      - run: pnpm install
+      - run: pnpm install --ignore-scripts=false
 
       - run: pnpm run build
 

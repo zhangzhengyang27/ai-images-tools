@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useHistoryStore } from '@/stores/historyStore'
+import UpdateChecker from '@/components/UpdateChecker.vue'
 
 const historyStore = useHistoryStore()
 const isMac = navigator.platform.toUpperCase().includes('MAC')
@@ -22,6 +23,7 @@ const handleClose = () => {
     <div class="title-bar__traffic-spacer"></div>
     <div class="title-bar__title">图片压缩工具</div>
     <div class="title-bar__actions">
+      <UpdateChecker />
       <button
         class="title-bar__action-btn"
         title="历史记录 (Ctrl+H)"

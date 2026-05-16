@@ -169,6 +169,23 @@ export interface ElectronAPI {
   clearHistory: () => Promise<{ success: boolean; error?: string }>
   exportHistory: () => Promise<{ success: boolean; exportedPath?: string; error?: string }>
   importHistory: () => Promise<{ success: boolean; count?: number; error?: string }>
+  // 自动更新
+  checkForUpdates: () => Promise<{
+    success: boolean
+    updateInfo?: { version: string; releaseNotes?: string; releaseName?: string } | null
+    error?: string
+  }>
+  downloadUpdate: () => Promise<{ success: boolean; error?: string }>
+  installUpdate: () => Promise<{ success: boolean }>
+  onUpdateAvailable: (
+    callback: (info: { version: string; releaseNotes?: string; releaseName?: string }) => void
+  ) => () => void
+  onUpdateNotAvailable: (callback: () => void) => () => void
+  onUpdateProgress: (
+    callback: (data: { percent: number; bytesPerSecond: number; transferred: number; total: number }) => void
+  ) => () => void
+  onUpdateDownloaded: (callback: () => void) => () => void
+  onUpdateError: (callback: (data: { message: string }) => void) => () => void
 }
 
 declare global {
